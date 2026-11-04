@@ -324,6 +324,41 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .door.kid .go{color:rgba(255,255,255,.9)}
 .today ol{margin:2px 0 16px}
 .tile{min-height:104px}
+/* ---------- Symbole: Fächer, Personen, Dateien ---------- */
+:root{--bio:#2E7D4F;--phy:#5B57C9;--gl:#2F7D8C;--rel:#8A5A2B;--c1:#7A5AC8;--c2:#C9822A;--c3:#3B7FC4;--c4:#B8467A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bio:#6CCB91;--phy:#A6A3F2;--gl:#6CC3D1;--rel:#D9A574;--c1:#B49BF0;--c2:#EDB461;--c3:#86B7EE;--c4:#EE8DB8}}
+:root[data-theme="dark"]{--bio:#6CCB91;--phy:#A6A3F2;--gl:#6CC3D1;--rel:#D9A574;--c1:#B49BF0;--c2:#EDB461;--c3:#86B7EE;--c4:#EE8DB8}
+.sb{grid-row:span 2;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:var(--sc);background:color-mix(in srgb,var(--sc) 13%,transparent)}
+.sb svg{width:23px;height:23px}
+.av{grid-row:span 2;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font:600 .9375rem/1 var(--sans);letter-spacing:.02em;color:#fff;background:var(--g,var(--muted))}
+.av.g-jungs{--g:var(--jungs)} .av.g-maedchen{--g:var(--maedchen)} .av.g-leitung{--g:var(--gold)}
+.tile{--sc:var(--accent)}
+.tile .big{display:grid;place-items:center;width:42px;height:42px;padding:0}
+.tile .big svg{width:24px;height:24px}
+.spick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.sp{display:grid;justify-items:center;align-content:center;gap:6px;aspect-ratio:1;border:2px solid transparent;border-radius:16px;background:color-mix(in srgb,var(--sc,var(--muted)) 10%,var(--surface));color:var(--sc,var(--muted));padding:6px 4px;min-width:0}
+.sp svg{width:28px;height:28px}
+.sp span{font:600 .75rem/1.15 var(--sans);color:var(--ink);text-align:center;overflow-wrap:anywhere;hyphens:auto}
+.sp.on{border-color:var(--sc);background:color-mix(in srgb,var(--sc) 18%,var(--surface))}
+.sp.add{background:transparent;border:2px dashed var(--line);color:var(--muted)}
+.sp.add span{color:var(--muted)}
+.adder{display:flex;gap:8px;margin-top:8px}
+.adder input{flex:1;min-width:0;min-height:40px;border:1px solid transparent;border-radius:12px;background:var(--fill);padding:8px 12px;font:inherit;color:var(--ink);outline:none}
+.topbar{display:flex;justify-content:space-between;align-items:center}
+.iconbtn{width:40px;height:40px;border:0;border-radius:50%;background:var(--fill);color:var(--ink);display:grid;place-items:center;margin-top:-8px}
+.iconbtn svg{width:22px;height:22px}
+.menu{display:grid;background:var(--fill);border-radius:16px;overflow:hidden}
+.menu button{border:0;background:none;text-align:left;padding:15px 16px;font-size:1.0625rem;font-weight:500;border-top:1px solid var(--line);color:var(--ink);min-height:52px}
+.menu button:first-child{border-top:0}
+.menu button.danger{color:var(--bad)}
+.menu button:active{background:var(--fill2)}
+[data-hold]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.pressing{transition:transform .45s ease-out,background-color .45s;transform:scale(.97)}
+.list .pressing{background:var(--fill)}
+.toast.undo{display:flex;align-items:center;gap:14px;padding:8px 8px 8px 18px}
+.toast.undo button{border:0;border-radius:999px;background:color-mix(in srgb,var(--bg) 22%,transparent);color:var(--bg);font-weight:700;padding:8px 14px;min-height:36px}
+.item:not(:has(.d)) .sb,.item:not(:has(.d)) .av,.item:not(:has(.d)) .r{grid-row:auto}
+.toast.undo span{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -353,6 +388,16 @@ const wday=d=>new Date(d+"T12:00").toLocaleDateString("de-DE",{weekday:"short"})
 const avg=a=>{a=a.filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.length:null};
 const fmt=n=>n==null||isNaN(n)?"–":n.toFixed(1).replace(".",",");
 const plural=(n,a,b)=>`${n} ${n===1?a:b}`;
+/* Hinweis mit „Rückgängig“: Löschen wird erst nach ein paar Sekunden endgültig */
+const HOLD=new Set();
+function undoToast(t,undo,commit){
+  document.querySelectorAll(".toast").forEach(x=>x.remove());
+  const el=document.createElement("div");el.className="toast undo";el.setAttribute("role","status");
+  el.innerHTML=`<span>${esc(t)}</span><button type="button">Rückgängig</button>`;document.body.append(el);
+  let done=false;const fin=()=>{if(done)return;done=true;el.remove();commit&&commit()};
+  el.querySelector("button").onclick=()=>{if(done)return;done=true;el.remove();undo();render()};
+  setTimeout(fin,6000);
+}
 function toast(t){document.querySelectorAll(".toast").forEach(x=>x.remove());const el=document.createElement("div");el.className="toast";el.setAttribute("role","status");el.textContent=t;document.body.append(el);setTimeout(()=>el.remove(),2000)}
 const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
@@ -386,7 +431,39 @@ const TOPICS={
   "d-dass":{s:"Deutsch",n:"das oder dass",k:[4,9],kind:"choice",gen(){const [q,c]=pick(DASS);return{q,opts:["das","dass"],c,ex:c?"„dass“ leitet einen Nebensatz ein und lässt sich nicht durch „dieses“ oder „welches“ ersetzen.":"Hier passt „dieses“ oder „welches“, also „das“."}}},
   "d-wortart":{s:"Deutsch",n:"Wortarten",k:[3,6],kind:"choice",gen(){const [w,t]=pick(WORDS);const o=["Nomen","Verb","Adjektiv"];return{q:`Welche Wortart ist „${w}“?`,opts:o,c:o.indexOf(t),ex:{Nomen:"Nomen schreibt man groß, „der, die, das“ passt davor.",Verb:"Verben sagen, was jemand tut.",Adjektiv:"Adjektive sagen, wie etwas ist."}[t]}}}
 };
-const TS=["Mathe","Deutsch","Englisch"];
+const SUBJ_BASE=["Mathe","Deutsch","Englisch"];
+/* Fächer: Mathe, Deutsch, Englisch sind fest, weitere legen Lehrkräfte selbst an */
+const allSubj=()=>[...SUBJ_BASE,...((DB.state.subjects)||[]).filter(x=>!SUBJ_BASE.includes(x))];
+const stuSubj=()=>[...new Set([...SUBJ_BASE,...SH.sheets.map(x=>x.subject)])];
+const SUBJ_PAL={Mathe:"--math",Deutsch:"--de",Englisch:"--en",Biologie:"--bio",Physik:"--phy",Chemie:"--phy",GL:"--gl",Geschichte:"--gl",Erdkunde:"--gl",Politik:"--gl",Religion:"--rel",Türkisch:"--de",Französisch:"--en",Informatik:"--phy",Sachunterricht:"--bio"};
+const PAL=["--c1","--c2","--c3","--c4"];
+const scol=n=>SUBJ_PAL[n]||PAL[[...n].reduce((a,c)=>a+c.charCodeAt(0),0)%PAL.length];
+const G=b=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${b}</svg>`;
+const SVG={
+  Mathe:G('<path d="M7 4.5v5M4.5 7h5M14.5 7h5M5.2 14.7l3.6 3.6M8.8 14.7l-3.6 3.6M14.5 15h5M14.5 18.2h5"/>'),
+  Deutsch:G('<path d="M4 18.5 8.6 6h.8l4.6 12.5M5.6 14.2h6.8"/><path d="M15.5 10.4c.6-.6 1.4-.9 2.3-.9 1.6 0 2.4.9 2.4 2.5v6.5M20.2 14.3c-2.9 0-4.9.5-4.9 2.3 0 1.2.9 1.9 2.1 1.9 1.5 0 2.8-1.1 2.8-2.8"/>'),
+  Englisch:G('<path d="M5 5.5h14a1.6 1.6 0 0 1 1.6 1.6v8.2a1.6 1.6 0 0 1-1.6 1.6H11l-4.4 3.3v-3.3H5a1.6 1.6 0 0 1-1.6-1.6V7.1A1.6 1.6 0 0 1 5 5.5Z"/><path d="M8.5 9.5v4M8.5 11.5h3M11.5 9.5v4M15 9.5v4"/>'),
+  Biologie:G('<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14Z"/><path d="M5 19 13 11"/>'),
+  GL:G('<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.3 2.3 3.4 5 3.4 8s-1.1 5.7-3.4 8c-2.3-2.3-3.4-5-3.4-8S9.7 6.3 12 4Z"/>'),
+  book:G('<path d="M5 5.5A1.5 1.5 0 0 1 6.5 4H19v13H6.5A1.5 1.5 0 0 0 5 18.5v-13ZM5 18.5A1.5 1.5 0 0 0 6.5 20H19"/>'),
+  bolt:G('<path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z"/>'),
+  redo:G('<path d="M19 8a7.5 7.5 0 1 0 1.3 6"/><path d="M19.5 3.5V8H15"/>'),
+  pdf:G('<path d="M7 3.5h7l4.5 4.5v11A1.5 1.5 0 0 1 17 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z"/><path d="M14 3.5V8h4.5M8.5 13h7M8.5 16.5h5"/>'),
+  img:G('<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 16-5-5-8.5 8"/>'),
+  mail:G('<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/>'),
+  more:G('<circle cx="6" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18" cy="12" r="1.2" fill="currentColor"/>'),
+  plus:G('<path d="M12 5v14M5 12h14"/>')};
+SVG.Geschichte=SVG.GL;SVG.Erdkunde=SVG.GL;SVG.Politik=SVG.GL;SVG.Sachunterricht=SVG.Biologie;
+const sicon=n=>SVG[n]||SVG.book;
+const badge=n=>`<span class="sb" style="--sc:var(${scol(n)})">${sicon(n)}</span>`;
+const ibadge=(k,c="--accent")=>`<span class="sb" style="--sc:var(${c})">${SVG[k]}</span>`;
+const initials=n=>esc(String(n).trim().split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase());
+const av=(name,g)=>`<span class="av g-${g}">${initials(name)}</span>`;
+function subjPick(act,sel,canAdd){
+  return`<div class="spick">${allSubj().map(n=>`<button type="button" class="sp${sel===n?" on":""}" data-act="${act}" data-v="${esc(n)}" aria-pressed="${sel===n}" style="--sc:var(${scol(n)})">${sicon(n)}<span>${esc(n)}</span></button>`).join("")}
+    ${canAdd?`<button type="button" class="sp add" data-act="addSubj">${SVG.plus}<span>Fach</span></button>`:""}</div>`;
+}
+const TS=SUBJ_BASE;
 const fits=(t,k)=>TOPICS[t]&&k>=TOPICS[t].k[0]&&k<=TOPICS[t].k[1];
 const sheetFits=(x,s)=>x.groups.includes(s.group)&&s.klasse>=x.minK&&s.klasse<=x.maxK;
 function sheetItems(x){return x.items.map(it=>it.type==="choice"?{kind:"choice",ctx:x.subject+" · "+x.title,it:{q:it.q,opts:it.options,c:it.correct,ex:""}}:{kind:"text",ctx:x.subject+" · "+x.title,it:{q:it.q,a:it.answers,ex:""}})}
@@ -454,7 +531,7 @@ async function pull(){
   DB.duty=DB.state.duty&&DB.state.duty.entries?DB.state.duty:{entries:[]};
   DB.invites=inv.error?[]:inv.data;
   DB.docs=dc.error?[]:dc.data.map(x=>({id:x.id,sid:x.student_id,kind:x.kind,name:x.name,path:x.path,mime:x.mime,size:x.size,date:x.created_at.slice(0,10)}));DB.docsReady=!dc.error;
-  SNAP.sides=JSON.stringify(DB.state.sides||{});
+  for(const k of ["sides","subjects"])SNAP["st_"+k]=JSON.stringify(DB.state[k]||null);
   SNAP.students=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));
   SNAP.sheets=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));
   SNAP.duty=JSON.stringify(DB.duty);
@@ -468,17 +545,16 @@ async function push(){
   pushTimer=null;if(!session||!loaded)return;if(pushing){again=true;return}pushing=true;
   try{
     const cs=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));
-    const up=DB.students.filter(x=>cs[x.id]!==SNAP.students[x.id]),del=Object.keys(SNAP.students).filter(id=>!(id in cs));
+    const up=DB.students.filter(x=>cs[x.id]!==SNAP.students[x.id]),del=Object.keys(SNAP.students).filter(id=>!(id in cs)&&!HOLD.has(id));
     if(up.length){let r=await sb.from("students").upsert(up.map(studentRow));
       if(r.error&&r.error.code==="23505"){up.filter(x=>!(x.id in SNAP.students)).forEach(x=>{x.code=newCode();cs[x.id]=JSON.stringify(x)});r=await sb.from("students").upsert(up.map(studentRow))}
       chk(r);up.forEach(x=>SNAP.students[x.id]=cs[x.id])}
     if(del.length){chk(await sb.from("students").delete().in("id",del));del.forEach(id=>delete SNAP.students[id])}
     const ch=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));
-    const sup=DB.sheets.filter(x=>ch[x.id]!==SNAP.sheets[x.id]),sdel=Object.keys(SNAP.sheets).filter(id=>!(id in ch));
+    const sup=DB.sheets.filter(x=>ch[x.id]!==SNAP.sheets[x.id]),sdel=Object.keys(SNAP.sheets).filter(id=>!(id in ch)&&!HOLD.has(id));
     if(sup.length){chk(await sb.from("sheets").upsert(sup.map(x=>({id:x.id,data:x,updated_at:new Date().toISOString()}))));sup.forEach(x=>SNAP.sheets[x.id]=ch[x.id])}
     if(sdel.length){chk(await sb.from("attempts").delete().in("sheet_id",sdel));chk(await sb.from("sheets").delete().in("id",sdel));sdel.forEach(id=>delete SNAP.sheets[id])}
-    const sj=JSON.stringify(DB.state.sides||{});
-    if(sj!==SNAP.sides){chk(await sb.from("app_state").upsert({key:"sides",value:DB.state.sides||{},updated_at:new Date().toISOString()}));SNAP.sides=sj}
+    for(const k of ["sides","subjects"]){const j=JSON.stringify(DB.state[k]||null);if(j!==SNAP["st_"+k]){chk(await sb.from("app_state").upsert({key:k,value:DB.state[k]||(k==="sides"?{}:[]),updated_at:new Date().toISOString()}));SNAP["st_"+k]=j}}
     const dj=JSON.stringify(DB.duty);
     if(dj!==SNAP.duty){chk(await sb.from("app_state").upsert({key:"duty",value:DB.duty,updated_at:new Date().toISOString()}));SNAP.duty=dj}
     if(!again)dirty=false;setSync("ok");
@@ -566,7 +642,8 @@ const CONFETTI=`<div class="confetti" aria-hidden="true">${Array.from({length:18
 function info(k,t){return`<button class="info" data-act="info" data-v="${k}" aria-label="Info" aria-expanded="${ui.info===k}">i</button>${ui.info===k?`<span class="tip">${t}</span>`:""}`}
 
 /* ---------- Grundgerüst ---------- */
-function render(anim){
+function render(anim){try{renderInner(anim)}catch(err){console.error(err);$("#app").innerHTML=`<div class="block empty"><h2>Da hat etwas nicht geklappt</h2><p class="note2">Deine Daten sind gespeichert.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`}}
+function renderInner(anim){
   const app=$("#app"),nav=$("#nav"),fb=$("#fbar");
   document.body.classList.toggle("focus",!!ui.run);
   fb.hidden=!ui.run;nav.hidden=true;
@@ -585,7 +662,7 @@ function render(anim){
   else if(ui.mode==="loading")html=`<div class="empty">Lädt …</div>`;
   else html=viewStart();
   app.innerHTML=html;
-  renderSheet();
+  try{renderSheet()}catch(err){console.error(err);ui.sheet=null;$("#layer").innerHTML="";toast("Das Fenster ließ sich nicht öffnen.")}
   if(anim){app.classList.remove("vin");void app.offsetWidth;app.classList.add("vin")}
 }
 const LOGO=`<img class="logo" src="icon.svg" alt="Kocatepe Gençlik Ruhrort" width="88" height="88">`;
@@ -624,7 +701,7 @@ function viewWait(){return`<h1>Noch nicht freigeschaltet</h1><div class="block" 
 const MARK=`<svg class="mark" viewBox="-220 -190 440 330" aria-hidden="true"><path d="M -195,-138 C -165,-102 -128,-92 -100,-100 C -72,-108 -40,-124 -14,-132 C -75,-95 -125,-20 -112,60 C -108,90 -100,112 -92,128 C -160,100 -212,30 -212,-40 C -212,-82 -205,-115 -195,-138 Z"/><path d="M 195,-138 C 165,-102 128,-92 100,-100 C 72,-108 40,-124 14,-132 C 75,-95 125,-20 112,60 C 108,90 100,112 92,128 C 160,100 212,30 212,-40 C 212,-82 205,-115 195,-138 Z"/><circle cx="-130" cy="-152" r="30"/><circle cx="130" cy="-152" r="30"/><path d="M -80,130 L -80,0 C -80,-58 -22,-72 0,-106 C 22,-72 80,-58 80,0 L 80,130 L 40,130 L 40,4 C 40,-32 14,-48 0,-64 C -14,-48 -40,-32 -40,4 L -40,130 Z"/></svg>`;
 function viewStuHome(){
   const done=P.todayDone===today(),steps=done?[]:planToday(),n=steps.reduce((a,s)=>a+s.items.length,0);ui.plan=steps;
-  const subj=TS.map(s=>({s,L:myTopics().filter(t=>TOPICS[t].s===s),Sh:SH.sheets.filter(x=>x.subject===s)})).filter(x=>x.L.length||x.Sh.length);
+  const subj=stuSubj().map(s=>({s,L:myTopics().filter(t=>TOPICS[t].s===s),Sh:SH.sheets.filter(x=>x.subject===s)})).filter(x=>x.L.length||x.Sh.length);
   const sk=streak(P);
   return`<div class="hello"><h1>Hallo ${esc(STU.first)}!</h1>${sk?`<span class="streak" title="Tage am Stück">${FLAME}${sk}</span>`:""}</div>
   <section class="today">${MARK}
@@ -633,23 +710,23 @@ function viewStuHome(){
     ${done?`<button class="btn" data-act="stab" data-v="practice">Weiter üben</button>`
     :`<ol>${steps.map(s=>`<li>${esc(s.label.split(" · ").pop())}</li>`).join("")}</ol><button class="btn" data-act="startToday">Starten</button>`}
   </section>
-  <div class="tiles">${subj.map(x=>`<button class="tile sub-${x.s}" data-act="subj" data-v="${x.s}"><span class="big">${SUBJ_ICON[x.s]}</span><b>${x.s}</b></button>`).join("")}</div>`;
+  <div class="tiles">${subj.map(x=>`<button class="tile" style="--sc:var(${scol(x.s)})" data-act="subj" data-v="${esc(x.s)}"><span class="big">${sicon(x.s)}</span><b>${esc(x.s)}</b></button>`).join("")}</div>`;
 }
 function viewStuPractice(){
   if(ui.subj){
     const s=ui.subj,L=myTopics().filter(t=>TOPICS[t].s===s),Sh=SH.sheets.filter(x=>x.subject===s);
     return`<button class="crumb" data-act="subj" data-v="">‹ Üben</button><h1>${s}</h1>
-    ${Sh.length?`<div class="sect"><span>Von deinen Lehrern</span></div><div class="list">${Sh.map(x=>{const a=SH.attempts.find(y=>y.sheetId===x.id);return`<button class="item" data-act="sheetRun" data-v="${x.id}"><span class="ic">✎</span><span class="t">${esc(x.title)}</span><span class="r">${a?`<span class="chip${a.score===a.total?" good":""}">${a.score}/${a.total}</span>`:'<span class="chip goal">neu</span>'}›</span></button>`}).join("")}</div>`:""}
-    ${L.length?`<div class="sect"><span>Themen</span></div><div class="list">${L.map(t=>{const m=mastery(P,t);return`<button class="item" data-act="topic" data-v="${t}"><span class="ic">${TOPICS[t].kind==="pad"?"123":TOPICS[t].kind==="text"?"Aa":"A|B"}</span><span class="t">${TOPICS[t].n}</span><span class="r">${STU.goals.includes(t)?'<span class="chip goal">Förderziel</span>':m!=null&&m>=.85?'<span class="chip good">sitzt</span>':""}›</span><span class="bar"><i style="width:${Math.round((m||0)*100)}%"></i></span></button>`}).join("")}</div>
+    ${Sh.length?`<div class="sect"><span>Von deinen Lehrern</span></div><div class="list">${Sh.map(x=>{const a=SH.attempts.find(y=>y.sheetId===x.id);return`<button class="item" data-act="sheetRun" data-v="${x.id}">${badge(x.subject)}<span class="t">${esc(x.title)}</span><span class="r">${a?`<span class="chip${a.score===a.total?" good":""}">${a.score}/${a.total}</span>`:'<span class="chip goal">neu</span>'}›</span></button>`}).join("")}</div>`:""}
+    ${L.length?`<div class="sect"><span>Themen</span></div><div class="list">${L.map(t=>{const m=mastery(P,t);return`<button class="item" data-act="topic" data-v="${t}">${badge(TOPICS[t].s)}<span class="t">${TOPICS[t].n}</span><span class="r">${STU.goals.includes(t)?'<span class="chip goal">Förderziel</span>':m!=null&&m>=.85?'<span class="chip good">sitzt</span>':""}›</span><span class="bar"><i style="width:${Math.round((m||0)*100)}%"></i></span></button>`}).join("")}</div>
     `:""}`;
   }
   return`<h1>Üben</h1>
   <div class="list">
-    <button class="item" data-act="mix"><span class="ic">∞</span><span class="t">Schnelle Runde</span><span class="r">›</span></button>
-    <button class="item" data-act="wrongs" ${P.wrongs.length?"":"disabled"}><span class="ic">↺</span><span class="t">Fehler wiederholen</span><span class="r">${P.wrongs.length?`<span class="chip">${P.wrongs.length}</span>`:""}›</span></button>
+    <button class="item" data-act="mix">${ibadge("bolt","--c2")}<span class="t">Schnelle Runde</span><span class="r">›</span></button>
+    <button class="item" data-act="wrongs" ${P.wrongs.length?"":"disabled"}>${ibadge("redo","--de")}<span class="t">Fehler wiederholen</span><span class="r">${P.wrongs.length?`<span class="chip">${P.wrongs.length}</span>`:""}›</span></button>
   </div>
   <div class="sect"><span>Nach Fach</span></div>
-  <div class="list">${TS.filter(s=>myTopics().some(t=>TOPICS[t].s===s)||SH.sheets.some(x=>x.subject===s)).map(s=>`<button class="item" data-act="subj" data-v="${s}"><span class="ic">${s[0]}</span><span class="t">${s}</span><span class="r">›</span></button>`).join("")}</div>`;
+  <div class="list">${stuSubj().filter(s=>myTopics().some(t=>TOPICS[t].s===s)||SH.sheets.some(x=>x.subject===s)).map(s=>`<button class="item" data-act="subj" data-v="${esc(s)}">${badge(s)}<span class="t">${esc(s)}</span><span class="r">›</span></button>`).join("")}</div>`;
 }
 function weekBlock(p,title){
   const w=week(p),max=Math.max(10,...w.map(x=>x.v)),sum=w.reduce((a,b)=>a+b.v,0);
@@ -664,7 +741,7 @@ function viewStuStats(){
   <div class="block">${weekBlock(P,"Diese Woche")}</div>
   <div class="stats"><div><b>${sk}</b><span>Tage am Stück</span></div><div><b>${tot}</b><span>Aufgaben gesamt</span></div><div><b>${acc==null?"–":acc+" %"}</b><span>richtig</span></div></div>
   <div class="sect"><span>Deine Themen</span></div>
-  <div class="list">${myTopics().map(t=>{const m=mastery(P,t);return`<div class="item"><span class="ic">${TOPICS[t].s[0]}</span><span class="t">${TOPICS[t].n}</span><span class="r small">${m==null?"neu":Math.round(m*100)+" %"}</span><span class="bar"><i style="width:${Math.round((m||0)*100)}%"></i></span></div>`}).join("")}</div>
+  <div class="list">${myTopics().map(t=>{const m=mastery(P,t);return`<div class="item">${badge(TOPICS[t].s)}<span class="t">${TOPICS[t].n}</span><span class="r small">${m==null?"neu":Math.round(m*100)+" %"}</span><span class="bar"><i style="width:${Math.round((m||0)*100)}%"></i></span></div>`}).join("")}</div>
   <div class="row" style="justify-content:center;margin-top:18px"><button class="btn ghost small" data-act="home">Abmelden</button></div>`;
 }
 
@@ -709,7 +786,7 @@ function viewStudents(){
   L.sort((a,b)=>a.first.localeCompare(b.first,"de"));
   return`${hintsBlock()}<div class="headwrap"><div class="head"><h1>Schüler</h1><button class="btn small" data-act="newStudent">Hinzufügen</button></div></div>
   ${lead()||visible().length>8?`<div class="row" style="margin:0 0 12px">${lead()?`<div class="seg" role="group" aria-label="Gruppe">${["alle","jungs","maedchen"].map(f=>`<button data-act="filter" data-v="${f}" aria-pressed="${ui.filter===f}">${f==="alle"?"Alle":GROUPS[f].label}</button>`).join("")}</div>`:""}${visible().length>8?`<input id="q" type="search" placeholder="Suchen" value="${esc(ui.q)}" aria-label="Suchen" style="flex:1;min-width:8rem;min-height:36px;border:0;border-radius:12px;background:var(--fill);padding:6px 12px">`:""}</div>`:""}
-  ${L.length?`<div class="list">${L.map(s=>{const {w}=stuStats(s);return`<button class="item" data-act="open" data-v="${s.id}"><span class="ic g-${s.group}">${esc(s.first[0])}</span><span class="t">${esc(s.first)} ${esc(s.last)}</span><span class="r">${!DB.docs.some(d=>d.sid===s.id&&d.kind==="Vertrag")?'<span class="dot warnd" title="Vertrag fehlt"></span>':""}›</span><span class="d">Klasse ${s.klasse}</span></button>`}).join("")}</div>`
+  ${L.length?`<div class="list">${L.map(s=>{const {w}=stuStats(s);return`<button class="item" data-act="open" data-v="${s.id}" data-hold="student:${s.id}">${av(s.first+" "+s.last,s.group)}<span class="t">${esc(s.first)} ${esc(s.last)}</span><span class="r">${!DB.docs.some(d=>d.sid===s.id&&d.kind==="Vertrag")?'<span class="dot warnd" title="Vertrag fehlt"></span>':""}›</span><span class="d">Klasse ${s.klasse}</span></button>`}).join("")}</div>`
   :`<div class="block empty">${visible().length?"Niemand passt zur Suche.":"Noch keine Schüler. Tippe auf „Hinzufügen“."}</div>`}`;
 }
 function subjRow(s,sub){
@@ -727,7 +804,7 @@ function viewStudent(){
   const shs=DB.sheets.filter(x=>sheetFits(x,s));
   let cells="";for(let r=0;r<8;r++){cells+=`<div class="n">${r+1}</div>`;for(let d=0;d<5;d++){const v=s.plan[d+"-"+r]||"";cells+=`<button class="${v?"f":""}" data-act="cell" data-v="${d}-${r}" aria-label="${DAYS[d]}, ${r+1}. Stunde: ${esc(v||"frei")}">${esc(v)}</button>`}}
   const palette=[...new Set([...s.subjects,"Mathe","Deutsch","Englisch","GL","NW","Sport","Religion","Kunst","Musik","Biologie","Physik","Chemie","Erdkunde","Geschichte","Politik","Technik"])];
-  return`<button class="crumb" data-act="back">‹ Schüler</button>
+  return`<div class="topbar"><button class="crumb" data-act="back">‹ Schüler</button><button class="iconbtn" data-act="menu" data-v="student:${s.id}" aria-label="Mehr">${SVG.more}</button></div>
   <div class="eyebrow">Klasse ${s.klasse} · ${esc(s.schulform)}</div>
   <h1>${esc(s.first)} ${esc(s.last)}</h1>
 
@@ -777,7 +854,7 @@ function docsBlock(s){
   const miss=!L.some(d=>d.kind==="Vertrag");
   return`<section class="block"><div class="bh"><h2>Unterlagen</h2><button class="btn ghost small" data-act="addDoc">+ Hochladen</button></div>
     ${CLOUD&&!DB.docsReady?`<p class="note2">Skript 04 fehlt noch.</p>`:""}
-    ${L.length?`<div class="list" style="padding:0;background:none">${L.map(d=>`<button class="item" data-act="openDoc" data-v="${d.id}"><span class="ic">${/pdf/.test(d.mime)?"PDF":"Bild"}</span><span class="t">${esc(d.kind)}</span><span class="r small">${fdate(d.date)} ›</span><span class="d">${esc(d.name)}</span></button>`).join("")}</div>`:""}
+    ${L.length?`<div class="list" style="padding:0;background:none">${L.map(d=>`<button class="item" data-act="openDoc" data-v="${d.id}" data-hold="doc:${d.id}">${/pdf/.test(d.mime)?ibadge("pdf","--de"):ibadge("img","--c3")}<span class="t">${esc(d.kind)}</span><span class="r small">${fdate(d.date)} ›</span><span class="d">${esc(d.name)}</span></button>`).join("")}</div>`:""}
     ${miss?`<span class="chip warnc"${L.length?' style="margin-top:8px"':""}>Vertrag fehlt</span>`:""}
   </section>`;
 }
@@ -828,6 +905,45 @@ function downloadIcs(list,title){
   if(!CLOUD)toast("In der Vorschau gesperrt, in der echten App klappt es");
 }
 
+function removeStudent(s){
+  const i=DB.students.indexOf(s);DB.students.splice(i,1);HOLD.add(s.id);ui.sheet=null;ui.sid=null;save();
+  undoToast(s.first+" entfernt",()=>{DB.students.splice(i,0,s);HOLD.delete(s.id);save()},()=>{HOLD.delete(s.id);save()});
+}
+function removeSheet(id){
+  const i=DB.sheets.findIndex(x=>x.id===id),x=DB.sheets[i],att=DB.attempts.filter(a=>a.sheetId===id);
+  DB.sheets.splice(i,1);DB.attempts=DB.attempts.filter(a=>a.sheetId!==id);HOLD.add(id);save();
+  undoToast("Blatt gelöscht",()=>{DB.sheets.splice(i,0,x);DB.attempts.push(...att);HOLD.delete(id);save()},()=>{HOLD.delete(id);save()});
+}
+function removeTerm(id){
+  const i=DB.duty.entries.findIndex(x=>x.id===id),x=DB.duty.entries[i];DB.duty.entries.splice(i,1);save();
+  undoToast("Termin gelöscht",()=>{DB.duty.entries.splice(i,0,x);save()});
+}
+function removeDoc(id){
+  const i=DB.docs.findIndex(y=>y.id===id),x=DB.docs[i];DB.docs.splice(i,1);if(!CLOUD)save();
+  undoToast("Unterlage gelöscht",()=>{DB.docs.splice(i,0,x);if(!CLOUD)save()},()=>{if(CLOUD){sb.storage.from("docs").remove([x.path]);sb.from("documents").delete().eq("id",x.id).then(r=>{if(r.error)toast("Löschen hat nicht geklappt")})}});
+}
+/* Schnellaktionen: Gedrückthalten oder „⋯“ */
+function menuItems(k,id){
+  if(k==="student"){const s=DB.students.find(x=>x.id===id);return s?{title:s.first+" "+s.last,items:[["Öffnen","open",id],["Bearbeiten","mEdit",id],["Entfernen","mDelStudent",id,1]]}:null}
+  if(k==="term"){const e=DB.duty.entries.find(x=>x.id===id);return e?{title:wday(e.date)+" "+fdate(e.date),items:[["Bearbeiten","editTerm",id],["In den Kalender","ics",id],["Löschen","mDelTerm",id,1]]}:null}
+  if(k==="task"){const x=DB.sheets.find(y=>y.id===id);return x?{title:x.title,items:[["Bearbeiten","editTask",id],["Löschen","mDelTask",id,1]]}:null}
+  if(k==="doc"){const x=DB.docs.find(y=>y.id===id);return x?{title:x.kind,items:[["Öffnen","openDoc",id],["Löschen","mDelDoc",id,1]]}:null}
+  return null;
+}
+let holdT=null,holdEl=null,holdFired=false,holdXY=null;
+document.addEventListener("pointerdown",e=>{holdFired=false;const el=e.target.closest("[data-hold]");if(!el||e.button>0)return;holdEl=el;holdFired=false;holdXY=[e.clientX,e.clientY];el.classList.add("pressing");
+  holdT=setTimeout(()=>{holdFired=true;el.classList.remove("pressing");navigator.vibrate?.(12);const [k,id]=el.dataset.hold.split(":");const m=menuItems(k,id);if(m){ui.sheet={type:"menu",m};render()}},480)});
+const holdEnd=()=>{clearTimeout(holdT);holdEl?.classList.remove("pressing");holdEl=null};
+document.addEventListener("pointerup",holdEnd);document.addEventListener("pointercancel",holdEnd);
+document.addEventListener("pointermove",e=>{if(holdEl&&holdXY&&Math.hypot(e.clientX-holdXY[0],e.clientY-holdXY[1])>10)holdEnd()});
+document.addEventListener("contextmenu",e=>{if(e.target.closest("[data-hold]"))e.preventDefault()});
+document.addEventListener("click",e=>{if(holdFired){holdFired=false;e.stopPropagation();e.preventDefault()}},true);
+/* Schutz: Fehler zeigen statt weißer Seite, nichts Ungespeichertes verlieren */
+window.addEventListener("error",()=>toast("Da hat etwas nicht geklappt. Deine Daten sind sicher."));
+window.addEventListener("unhandledrejection",()=>toast("Keine Verbindung. Wird gleich erneut versucht."));
+window.addEventListener("beforeunload",e=>{if(CLOUD&&dirty){e.preventDefault();e.returnValue=""}});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&CLOUD&&dirty){clearTimeout(pushTimer);push()}});
+
 /* ---------- Lehrkräfte: Aufgaben ---------- */
 function viewTasks(){
   const S=DB.sheets.filter(x=>lead()||x.groups.includes(me().group));
@@ -835,16 +951,16 @@ function viewTasks(){
   return`<div class="headwrap"><div class="head"><h1>Aufgaben</h1><button class="btn small" data-act="newTask">Neues Blatt</button></div></div>
   <div class="sect"><span>Eigene Blätter</span></div>
   ${S.length?`<div class="list">${S.map(x=>{const who=studs.filter(s=>sheetFits(x,s)),did=who.filter(s=>DB.attempts.some(a=>a.sid===s.id&&a.sheetId===x.id)).length;
-    return`<button class="item" data-act="editTask" data-v="${x.id}"><span class="ic">${x.subject[0]}</span><span class="t">${esc(x.title)}</span><span class="r"><span class="chip">${did}/${who.length}</span>›</span><span class="d">Klasse ${x.minK}–${x.maxK}</span></button>`}).join("")}</div>`:`<div class="block empty">Noch keine eigenen Blätter.</div>`}
+    return`<button class="item" data-act="editTask" data-v="${x.id}" data-hold="task:${x.id}">${badge(x.subject)}<span class="t">${esc(x.title)}</span><span class="r"><span class="chip">${did}/${who.length}</span>›</span><span class="d">${esc(x.subject)} · Klasse ${x.minK}–${x.maxK}</span></button>`}).join("")}</div>`:`<div class="block empty">Noch keine eigenen Blätter.</div>`}
   <div class="sect"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">Themen ${info("top","Erzeugen immer neue Aufgaben. Ihr wählt sie beim Schüler als Förderziel.")}</span></div>
-  <div class="list">${Object.entries(TOPICS).map(([k,t])=>`<div class="item"><span class="ic">${t.s[0]}</span><span class="t">${esc(t.n)}</span><span class="r small">Kl. ${t.k[0]}–${t.k[1]}</span></div>`).join("")}</div>`;
+  <div class="list">${Object.entries(TOPICS).map(([k,t])=>`<div class="item">${badge(t.s)}<span class="t">${esc(t.n)}</span><span class="r small">Kl. ${t.k[0]}–${t.k[1]}</span><span class="d">${t.s}</span></div>`).join("")}</div>`;
 }
 
 /* ---------- Lehrkräfte: Plan und Team ---------- */
 const comesTo=(e)=>{const wd=["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(e.date+"T12:00").getDay()];return DB.students.filter(s=>s.group===e.grp&&(s.come||[]).includes(wd))};
 function termRow(e,past){
   const ppl=e.who.map(id=>DB.teachers.find(t=>t.id===id)).filter(Boolean),kids=comesTo(e);
-  return`<button class="term${past?" past":""}" data-act="editTerm" data-v="${e.id}"><span class="day"><small>${wday(e.date)}</small><b>${new Date(e.date+"T12:00").getDate()}.</b></span>
+  return`<button class="term${past?" past":""}" data-act="editTerm" data-v="${e.id}" data-hold="term:${e.id}"><span class="day"><small>${wday(e.date)}</small><b>${new Date(e.date+"T12:00").getDate()}.</b></span>
     <span class="who">${ppl.length?ppl.map(t=>`<span class="pp g-${t.group}"><i>${esc(t.name[0])}</i>${esc(t.name)}</span>`).join(""):'<span class="open">Noch offen</span>'}</span><span class="r">›</span>
     <span class="sub">${lead()?GROUPS[e.grp].label+" · ":""}${esc(e.time.split(/[–-]/)[0])} · ${kids.length?kids.map(k=>esc(k.first)).join(", "):"–"}</span></button>`;
 }
@@ -861,8 +977,8 @@ function viewPlan(){
   ${icsBtn?`<div class="row" style="margin-top:12px">${icsBtn}</div>`:""}
   ${past.length?`<details class="block" style="margin-top:12px"><summary>Vergangene Termine</summary><div>${past.map(e=>termRow(e,1)).join("")}</div></details>`:""}
   <div class="sect"><span>Team</span>${CLOUD&&lead()?`<button class="btn ghost small" data-act="invite">Einladen</button>`:""}</div>
-  <div class="list">${DB.teachers.map(t=>`<button class="item" data-act="teacher" data-v="${t.id}" ${lead()?"":"disabled"}><span class="ic g-${t.group}">${esc(t.name[0])}</span><span class="t">${esc(t.name)}${t.id===DB.me?' <span class="small muted">(du)</span>':""}</span><span class="r">${lead()?"›":""}</span><span class="d">${GROUPS[t.group].label}</span></button>`).join("")}
-  ${DB.invites.map(i=>`<div class="item"><span class="ic">✉</span><span class="t">${esc(i.name)}</span><span class="r">${delBtn("invite",i.email)}</span><span class="d">eingeladen · ${esc(i.email)} · ${GROUPS[i.grp].label}</span></div>`).join("")}</div>
+  <div class="list">${DB.teachers.map(t=>`<button class="item" data-act="teacher" data-v="${t.id}" ${lead()?"":"disabled"}>${av(t.name,t.group)}<span class="t">${esc(t.name)}${t.id===DB.me?' <span class="small muted">(du)</span>':""}</span><span class="r">${lead()?"›":""}</span><span class="d">${GROUPS[t.group].label}</span></button>`).join("")}
+  ${DB.invites.map(i=>`<div class="item">${ibadge("mail","--c3")}<span class="t">${esc(i.name)}</span><span class="r">${delBtn("invite",i.email)}</span><span class="d">eingeladen · ${esc(i.email)} · ${GROUPS[i.grp].label}</span></div>`).join("")}</div>
   <div class="row" style="justify-content:center;margin-top:18px"><button class="btn ghost small" data-act="logout">${CLOUD?"Abmelden":"Beenden"}</button></div>`;
 }
 
@@ -894,7 +1010,7 @@ function renderSheet(){
     <div class="f">Stand${choice("lStat",["erledigt","teilweise","nicht geschafft"],d.status)}</div><button class="btn wide" data-act="saveLog">Speichern</button>`;
   if(sh.type==="tag")body=head(sh.k==="strengths"?"Stärke ergänzen":"Schwäche ergänzen")+`<form id="ftag"><label class="f">Stichwort<input id="t-val" placeholder="${sh.k==="strengths"?"z. B. Kopfrechnen":"z. B. Textaufgaben"}" autocomplete="off"></label></form><button class="btn wide" data-act="saveTag">Hinzufügen</button>`;
   if(sh.type==="goal"){const g=s.goals||[];const L2=Object.keys(TOPICS).filter(t=>!g.includes(t)).sort((a,b)=>fits(b,s.klasse)-fits(a,s.klasse));
-    body=head("Förderziel")+`<div class="list" style="background:var(--fill)">${L2.map(t=>`<button class="item" data-act="pickGoal" data-v="${t}"><span class="ic">${TOPICS[t].s[0]}</span><span class="t">${esc(TOPICS[t].n)}</span><span class="r">${fits(t,s.klasse)?"":'<span class="chip">andere Klasse</span>'}</span><span class="d">${TOPICS[t].s}</span></button>`).join("")}</div>`}
+    body=head("Förderziel")+`<div class="list" style="background:var(--fill)">${L2.map(t=>`<button class="item" data-act="pickGoal" data-v="${t}">${badge(TOPICS[t].s)}<span class="t">${esc(TOPICS[t].n)}</span><span class="r">${fits(t,s.klasse)?"":'<span class="chip">andere Klasse</span>'}</span><span class="d">${TOPICS[t].s}</span></button>`).join("")}</div>`}
   if(sh.type==="term"){const ppl=DB.teachers.filter(t=>side(t)===d.grp);
     body=head(sh.isNew?"Termin anlegen":"Termin")+`<div class="fg"><label class="f">Datum<input id="tm-date" type="date" value="${esc(d.date)}"></label><label class="f">Uhrzeit<input id="tm-time" value="${esc(d.time)}"></label></div>
       <div class="f">Gruppe${choice("tmGrp",[["jungs","Jungs"],["maedchen","Mädchen"]],d.grp,lead()?"":"disabled")}</div>
@@ -905,7 +1021,7 @@ function renderSheet(){
       ${sh.isNew?"":`<button class="btn ghost" data-act="ics" data-v="${sh.id}">In den Kalender</button>`}
       ${err}<div class="row" style="justify-content:space-between"><button class="btn" data-act="saveTerm">Speichern</button>${sh.isNew?"":ui.confirm==="term"?`<button class="btn warn" data-act="delTerm">Wirklich löschen</button>`:`<button class="btn warn" data-act="ask" data-k="term" data-v="">Löschen</button>`}</div>`}
   if(sh.type==="task"){const lock=!lead();
-    body=head(sh.isNew?"Neues Blatt":"Blatt bearbeiten")+`<div class="f">Fach${choice("tkSub",TS,d.subject)}</div>
+    body=head(sh.isNew?"Neues Blatt":"Blatt bearbeiten")+`<div class="f">Fach${subjPick("tkSub",d.subject,true)}${sh.addSubj?`<div class="adder"><input id="ns-name" placeholder="Name des Fachs" autocomplete="off"><button class="btn small" data-act="saveSubj">Hinzufügen</button></div>`:""}</div>
       <div class="fg"><label class="f">Titel<input id="tk-title" value="${esc(d.title)}" placeholder="z. B. Vokabeln Unit 3" autocomplete="off"></label><label class="f">Ab Klasse<select id="tk-min">${opt(Array.from({length:10},(_,i)=>i+1),d.minK)}</select></label><label class="f">Bis Klasse<select id="tk-max">${opt(Array.from({length:10},(_,i)=>i+1),d.maxK)}</select></label></div>
       <div class="f">Für${choice("tkGroup",[["jungs","Jungs"],["maedchen","Mädchen"]],d.groups,lock?"disabled":"")}</div>
       ${d.items.map((it,i)=>`<div class="qedit"><div class="bh"><b>Aufgabe ${i+1}</b><div class="row"><div class="seg">${[["input","Eintippen"],["choice","Auswählen"]].map(([k,l])=>`<button type="button" data-act="tkType" data-i="${i}" data-v="${k}" aria-pressed="${it.type===k}">${l}</button>`).join("")}</div>${d.items.length>1?`<button class="btn ghost small" data-act="tkDel" data-i="${i}" aria-label="Aufgabe löschen" style="background:none;color:var(--muted)">×</button>`:""}</div></div>
@@ -926,6 +1042,7 @@ function renderSheet(){
     body=head(esc(x.kind))+`<p class="note2" style="margin:0">${esc(x.name)} · ${fdate(x.date)}</p>
       ${sh.url&&/^image/.test(x.mime)?`<img src="${esc(sh.url)}" alt="${esc(x.name)}" style="border-radius:14px;width:100%">`:sh.url?`<a class="btn" href="${esc(sh.url)}" target="_blank" rel="noopener">PDF öffnen</a>`:`<p class="note2">${CLOUD?"Wird geladen …":"In der Vorschau lässt sich die Datei nicht öffnen. In der echten App öffnet sie sich hier."}</p>`}
       ${ui.confirm==="doc"?`<button class="btn warn" data-act="delDoc">Wirklich löschen</button>`:`<button class="btn warn" data-act="ask" data-k="doc" data-v="">Löschen</button>`}`}
+  if(sh.type==="menu")body=`<div class="bh"><h2>${esc(sh.m.title)}</h2><button class="btn ghost small" data-act="close">Schließen</button></div><div class="menu">${sh.m.items.map(([l,act,id,danger])=>`<button class="${danger?"danger":""}" data-act="${act}" data-v="${id}">${l}</button>`).join("")}</div>`;
   if(sh.type==="invite")body=head("Einladen")+`<div class="infoline">${info("inv2","Danach legt die Person mit genau dieser E-Mail ein Konto an.")}</div>
     <div class="fg"><label class="f">Vorname<input id="iv-name" autocomplete="off"></label><label class="f">E-Mail<input id="iv-mail" type="email" autocomplete="off"></label></div>
     <div class="f">Gruppe${choice("ivGrp",[["jungs","Jungs"],["maedchen","Mädchen"],["leitung","Leitung"]],d.grp)}</div><button class="btn wide" data-act="saveInvite">Einladen</button>`;
@@ -958,6 +1075,7 @@ document.addEventListener("click",e=>{
   if(act==="scrim"){if(e.target===a){ui.sheet=null;ui.confirm=null;render()}return}
   if(act!=="info")ui.info=null;
   if(!["ask","del","delStudent","delTerm","tkRemove","delTeacher","delDoc"].includes(act))ui.confirm=null;
+  if(act==="open"||act==="editTerm"||act==="editTask"||act==="openDoc"||act==="ics")if(ui.sheet?.type==="menu")ui.sheet=null;
   switch(act){
     case"home":if(ui.mode==="student"){lsDel("kt-schule-code");STU=null;P=null}ui.mode="start";ui.run=null;ui.sheet=null;ui.sid=null;render(true);scrollTo(0,0);return;
     case"asStudent":{const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
@@ -999,12 +1117,13 @@ document.addEventListener("click",e=>{
       if(sh.isNew){const n={id:uid(),code:newCode(),created:today(),note:"",strengths:[],focus:[],exams:[],reports:[],plan:{},log:[],goals:[],...d};DB.students.push(n);ui.sid=n.id;toast(d.first+" hinzugefügt")}
       else{Object.assign(s,{first:d.first,last:d.last,klasse:d.klasse,group:d.group,schule:d.schule,schulform:d.schulform,subjects:d.subjects,come:d.come});toast("Gespeichert")}
       ui.sheet=null;save();break}
-    case"delStudent":{const n=s.first;DB.students=DB.students.filter(x=>x.id!==s.id);ui.sheet=null;ui.sid=null;save();toast(n+" entfernt");break}
+    case"delStudent":removeStudent(s);break;
     case"ask":ui.confirm=a.dataset.k+(v||"");break;
     case"del":{const k=a.dataset.k;
-      if(k==="exam")s.exams=s.exams.filter(x=>x.id!==v);if(k==="report")s.reports=s.reports.filter(x=>x.id!==v);if(k==="log")s.log=s.log.filter(x=>x.id!==v);
       if(k==="invite"){sb.from("teacher_invites").delete().eq("email",v).then(x=>{if(x.error)toast("Löschen hat nicht geklappt")});DB.invites=DB.invites.filter(i=>i.email!==v);render();return}
-      save();toast("Gelöscht");break}
+      const arr={exam:"exams",report:"reports",log:"log"}[k];if(!arr)break;
+      const i=s[arr].findIndex(x=>x.id===v),item=s[arr][i];s[arr].splice(i,1);save();
+      undoToast("Gelöscht",()=>{s[arr].splice(i,0,item);save()});break}
     case"allLogs":ui.allLogs=true;break;
     case"addExam":ui.sheet={type:"exam"};break;
     case"saveExam":s.exams.push({id:uid(),subject:$("#e-sub").value,kind:$("#e-kind").value,date:$("#e-date").value||today(),grade:$("#e-grade").value,topic:$("#e-topic").value.trim()});ui.sheet=null;save();toast("Note gespeichert");break;
@@ -1017,21 +1136,24 @@ document.addEventListener("click",e=>{
     case"saveLog":s.log.push({id:uid(),date:$("#l-date").value||today(),kind:sh.d.kind,subject:$("#l-sub").value,status:sh.d.status,note:$("#l-note").value.trim()});ui.sheet=null;save();toast("Eintrag gespeichert");break;
     case"addTag":ui.sheet={type:"tag",k:a.dataset.k};render();$("#t-val")?.focus();return;
     case"saveTag":{const t=$("#t-val").value.trim();if(!t)return;s[sh.k].push(t);ui.sheet=null;save();break}
-    case"delTag":s[a.dataset.k].splice(+v,1);save();break;
+    case"delTag":{const k=a.dataset.k,it=s[k][+v];s[k].splice(+v,1);save();undoToast("Entfernt",()=>{s[k].splice(+v,0,it);save()});break}
     case"addGoal":ui.sheet={type:"goal"};break;
     case"pickGoal":s.goals=[...(s.goals||[]),v];ui.sheet=null;save();toast("Förderziel gesetzt");break;
-    case"delGoal":s.goals.splice(+v,1);save();break;
+    case"delGoal":{const it=s.goals[+v];s.goals.splice(+v,1);save();undoToast("Förderziel entfernt",()=>{s.goals.splice(+v,0,it);save()});break}
     case"brush":ui.brush=v;break;
     case"cell":if(ui.brush)s.plan[v]=ui.brush;else delete s.plan[v];save();break;
     case"newTask":ui.sheet={type:"task",isNew:1,d:{id:uid(),subject:"Mathe",title:"",minK:5,maxK:7,groups:lead()?["jungs","maedchen"]:[me().group],items:[blankItem("input")],created:today()}};break;
     case"editTask":{const x=JSON.parse(JSON.stringify(DB.sheets.find(y=>y.id===v)));x.items.forEach(it=>{if(it.type==="choice")it.optText=it.options.map((o,k)=>(k===it.correct?"*":"")+o).join("\n");else it.ansText=it.answers.join(" | ")});ui.sheet={type:"task",d:x};break}
     case"tkSub":readTask();sh.d.subject=v;break;
+    case"addSubj":readTask();sh.addSubj=!sh.addSubj;render();$("#ns-name")?.focus();return;
+    case"saveSubj":{readTask();const n=$("#ns-name").value.trim().replace(/\s+/g," ").slice(0,24);if(!n)return;
+      const ex=allSubj().find(x=>x.toLowerCase()===n.toLowerCase());if(!ex){DB.state.subjects=[...(DB.state.subjects||[]),n];save()}sh.d.subject=ex||n;sh.addSubj=false;break}
     case"tkGroup":readTask();toggle(sh.d.groups,v);break;
     case"tkType":{readTask();const i=+a.dataset.i,it=sh.d.items[i];if(it.type!==v){const n=blankItem(v);n.q=it.q;n.id=it.id;sh.d.items[i]=n}break}
     case"tkAdd":readTask();sh.d.items.push(blankItem(sh.d.items.at(-1).type));break;
     case"tkDel":readTask();sh.d.items.splice(+a.dataset.i,1);break;
     case"tkSave":{const er=saveTask();if(er){sh.err=er;break}toast(sh.isNew?"Blatt veröffentlicht":"Gespeichert");ui.sheet=null;break}
-    case"tkRemove":DB.sheets=DB.sheets.filter(x=>x.id!==sh.d.id);DB.attempts=DB.attempts.filter(x=>x.sheetId!==sh.d.id);ui.sheet=null;save();toast("Blatt gelöscht");break;
+    case"tkRemove":removeSheet(sh.d.id);ui.sheet=null;break;
     case"newTerm":{const g=side(me());ui.sheet={type:"term",isNew:1,d:{date:nextWd(g==="maedchen"?4:3),time:"16:30–19:30",grp:g,who:[DB.me].filter(Boolean),note:"",rep:false,n:6,alt:true}};break}
     case"editTerm":ui.sheet={type:"term",id:v,d:JSON.parse(JSON.stringify(DB.duty.entries.find(x=>x.id===v)))};break;
     case"tmGrp":readTerm();sh.d.grp=v;sh.d.who=sh.d.who.filter(id=>{const t=DB.teachers.find(x=>x.id===id);return t&&side(t)===v});break;
@@ -1041,7 +1163,7 @@ document.addEventListener("click",e=>{
       if(sh.isNew){const n=d.rep?d.n:1;for(let i=0;i<n;i++){const who=d.rep&&d.alt&&d.who.length>1?[d.who[i%d.who.length]]:[...d.who];DB.duty.entries.push({id:uid(),date:addDays(d.date,7*i),grp:d.grp,time:d.time,who,note:d.note})}toast(n>1?n+" Termine angelegt":"Termin angelegt")}
       else{Object.assign(DB.duty.entries.find(x=>x.id===sh.id),{date:d.date,grp:d.grp,time:d.time,who:d.who,note:d.note});toast("Gespeichert")}
       ui.sheet=null;save();break}
-    case"delTerm":DB.duty.entries=DB.duty.entries.filter(x=>x.id!==sh.id);ui.sheet=null;save();toast("Termin gelöscht");break;
+    case"delTerm":removeTerm(sh.id);ui.sheet=null;break;
     case"teacher":ui.sheet={type:"teacher",id:v};break;
     case"tSide":DB.state.sides={...(DB.state.sides||{}),[sh.id]:v};save();toast("Gespeichert");break;
     case"tGrp":{const t=DB.teachers.find(x=>x.id===sh.id);if(CLOUD)sb.from("teachers").update({grp:v}).eq("id",t.id).then(x=>{if(x.error)toast("Ändern hat nicht geklappt")});t.group=v;if(!CLOUD)save();toast("Gruppe geändert");break}
@@ -1056,11 +1178,16 @@ document.addEventListener("click",e=>{
     case"openDoc":{ui.sheet={type:"docview",id:v};render();const x=DB.docs.find(y=>y.id===v);
       if(CLOUD)sb.storage.from("docs").createSignedUrl(x.path,600).then(r=>{if(ui.sheet?.id===v){ui.sheet.url=r.data?.signedUrl||"";render()}});
       else if(x.data){ui.sheet.url=x.data;render()}return}
-    case"delDoc":{const x=DB.docs.find(y=>y.id===sh.id);if(CLOUD){sb.storage.from("docs").remove([x.path]);sb.from("documents").delete().eq("id",x.id).then(r=>{if(r.error)toast("Löschen hat nicht geklappt")})}
-      DB.docs=DB.docs.filter(y=>y.id!==x.id);if(!CLOUD)save();ui.sheet=null;toast("Gelöscht");break}
+    case"delDoc":removeDoc(sh.id);ui.sheet=null;break;
     case"ics":downloadIcs(DB.duty.entries.filter(e=>e.id===v),"Termin");return;
     case"icsMine":downloadIcs(DB.duty.entries.filter(e=>e.date>=today()&&e.who.includes(DB.me)),"Meine Termine");return;
     case"hint":if(a.dataset.k==="term"){ui.tab="plan";ui.sheet={type:"term",id:v,d:JSON.parse(JSON.stringify(DB.duty.entries.find(x=>x.id===v)))}}else if(a.dataset.k==="stu"){ui.tab="students";ui.sid=v}else{ui.tab="students";ui.sid=null}break;
+    case"menu":{const [k,id]=v.split(":");const m=menuItems(k,id);if(m){m.items=m.items.filter(x=>x[1]!=="open");ui.sheet={type:"menu",m}}break}
+    case"mEdit":ui.sid=v;ui.sheet={type:"student",d:JSON.parse(JSON.stringify(DB.students.find(x=>x.id===v)))};break;
+    case"mDelStudent":removeStudent(DB.students.find(x=>x.id===v));break;
+    case"mDelTerm":removeTerm(v);ui.sheet=null;break;
+    case"mDelTask":removeSheet(v);ui.sheet=null;break;
+    case"mDelDoc":removeDoc(v);ui.sheet=null;break;
     case"info":if(sh?.type==="task")readTask();if(sh?.type==="invite")sh.d.keep={n:$("#iv-name").value,m:$("#iv-mail").value};ui.info=ui.info===v?null:v;break;
     case"close":ui.sheet=null;break;
     default:return;

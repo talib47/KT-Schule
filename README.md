@@ -13,6 +13,10 @@ Gruppen sind getrennt: Jungs-Lehrer sehen nur Jungs, Lehrerinnen nur Mädchen, d
 
 Gestaltung angelehnt an „Die Reihe“ der Uni-Lern-Apps (ruhige Flächen, Platte „Heute“ in Petrol, Newsreader, Glas-Tableiste, Lernmodus ohne Ablenkung). Außerhalb von github.io läuft die App als Vorschau mit Beispieldaten nur im Gerät.
 
+## Bauen und Updates
+
+Quelltext in `src/` (`app.js`, `base.css`, `extra.css`). Nach jeder Änderung `python3 build.py` ausführen und `index.html` **und** `version.txt` committen. Die App vergleicht beim Start und beim Zurückkehren ihre Version mit `version.txt` und lädt neue Versionen von selbst; auf dem Homebildschirm muss nichts neu installiert werden (nur bei geändertem Namen oder Symbol).
+
 ## Speicher
 
 Supabase (Projekt KT-Schule). Tabellen und Zugriffsregeln: `supabase/schema.sql`, danach `02_einladung.sql` und `03_lernstand.sql`.

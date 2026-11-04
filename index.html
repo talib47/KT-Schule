@@ -134,6 +134,7 @@ textarea{min-height:80px;resize:vertical}
 .note{font-size:13px;color:var(--muted);border-left:3px solid var(--gold);padding-left:10px}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(16px);opacity:.6}}}
 .brand{border:0;background:none;padding:0;text-align:left}
+.logo{width:40px;height:40px;border-radius:10px;flex:none}
 /* Startseite */
 .doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
 .door{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:22px 20px;text-align:left;display:grid;gap:8px;min-width:0}
@@ -163,7 +164,7 @@ textarea{min-height:80px;resize:vertical}
 </head>
 <body>
 <div class="bar"><div class="wrap">
-  <button class="brand" data-act="home">KT Lernzeit<small>KOCATEPE GENÇLİK RUHRORT</small></button>
+  <img class="logo" src="icon.svg" alt="" width="40" height="40"><button class="brand" data-act="home">KT Lernzeit<small>KOCATEPE GENÇLİK RUHRORT</small></button>
   <div class="grow"></div>
   <div class="row" id="barRight"></div>
 </div></div>
@@ -289,7 +290,7 @@ function render(){
   renderLayer();
 }
 function viewStart(){
-  return`<div class="head"><div class="eyebrow">Nachhilfe & Lernzeit</div><h1>Wer bist du?</h1></div>
+  return`<div class="head" style="justify-items:start"><img src="${document.querySelector(".logo").src}" alt="Kocatepe Gençlik Ruhrort" width="96" height="96" style="width:96px;height:96px;border-radius:22px"><div class="eyebrow">Nachhilfe & Lernzeit</div><h1>Wer bist du?</h1></div>
   <div class="doors">
     <button class="door t" data-act="asTeacher"><b>Lehrkräfte</b><span>Schüler, Noten, Zeugnisse, Stundenplan, Lernzeit und Übungsaufgaben verwalten.</span></button>
     <button class="door s" data-act="asStudent"><b>Schüler</b><span>Mit deinem Code anmelden und Aufgaben in Deutsch, Englisch und Mathe üben.</span></button>

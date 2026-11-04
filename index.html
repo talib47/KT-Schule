@@ -1229,6 +1229,19 @@ document.addEventListener("keydown",e=>{
   else if(e.key==="Backspace"){r.inp=r.inp.slice(0,-1);render()}
   else if(e.key==="Enter"&&r.inp)answer(r.inp);
 });
+/* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
+   Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
+const VERSION="f820f9d2b8";
+async function checkUpdate(){
+  if(!CLOUD)return;
+  try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();
+    if(!v||v===VERSION)return;
+    const go=()=>location.replace(location.pathname+"?v="+v);
+    if(!ui.run&&!ui.sheet&&!editing()&&!dirty){go();return}
+    if(!$("#upd")){const b=document.createElement("button");b.id="upd";b.className="toast";b.textContent="Neue Version da · Tippen zum Laden";b.onclick=()=>{if(dirty){clearTimeout(pushTimer);push().then(go)}else go()};document.body.append(b)}
+  }catch(e){}
+}
+checkUpdate();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate()});
 if(CLOUD){sb.auth.onAuthStateChange((ev,s2)=>{session=s2;if(ev==="PASSWORD_RECOVERY"){ui.mode="newpw";ui.authErr="";render()}});sb.auth.getSession().then(x=>{session=x.data.session})}
 render();
 

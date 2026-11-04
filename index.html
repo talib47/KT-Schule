@@ -171,6 +171,7 @@ textarea{min-height:80px;resize:vertical}
 <main class="wrap" id="app"></main>
 <div id="layer"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 /* ---------- Daten ---------- */
 const KEY="kt-lernzeit-v1";
@@ -234,20 +235,95 @@ function migrate(d){
   d.students.forEach(s=>{if(!s.code){let c;do{c=Array.from({length:6},()=>CODECH[Math.floor(Math.random()*CODECH.length)]).join("")}while(d.students.some(x=>x.code===c));s.code=c}});
   return d;
 }
-let mem=null;
-function load(){try{const r=localStorage.getItem(KEY);if(r)return migrate(JSON.parse(r))}catch(e){}return migrate(mem||seed())}
-let DB=load();
-function save(){mem=DB;try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
-save();
+/* ---------- Cloud (Supabase) ---------- */
+const SB_URL="https://xypbtkbnhgihbizxttdt.supabase.co";
+/* öffentlicher Schlüssel: darf im Code stehen, den Zugriff regeln die Regeln in der Datenbank */
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5cGJ0a2JuaGdpaGJpenh0dGR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MTc2MDgsImV4cCI6MjEwOTM5MzYwOH0.9IU81s7ATneda9mdrv65yOWTIRSBNZ3oLxaQd2XiAWI";
+const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,storageKey:"kt-schule-auth"}});
+let DB={me:null,teachers:[],students:[],sheets:[],attempts:[],duty:{std:{},dates:{},off:{}},invites:[],state:{}};
+let SNAP={students:{},sheets:{},duty:""};
+let STU={sheets:[],attempts:[]};
+let session=null,loaded=false,pushTimer=null,pushing=false,again=false,dirty=false;
+const studentRow=s=>({id:s.id,grp:s.group,code:s.code,klasse:+s.klasse,first_name:s.first,data:s});
+function setSync(st){const el=document.getElementById("sync");if(!el)return;el.textContent={busy:"Speichert …",ok:"Gespeichert",err:"Nicht gespeichert – keine Verbindung"}[st];el.style.color=st==="err"?"var(--bad)":"var(--muted)"}
+function chk(r){if(r.error)throw r.error;return r.data}
+async function pull(){
+  const [t,st,sh,at,ap,inv]=await Promise.all([
+    sb.from("teachers").select("id,name,grp"),sb.from("students").select("data"),sb.from("sheets").select("data"),
+    sb.from("attempts").select("id,student_id,sheet_id,score,total,created_at"),sb.from("app_state").select("key,value"),
+    sb.from("teacher_invites").select("email,name,grp")]);
+  DB.me=session?.user?.id||null;
+  DB.teachers=chk(t).map(x=>({id:x.id,name:x.name,group:x.grp})).sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  DB.students=chk(st).map(x=>x.data);
+  DB.sheets=chk(sh).map(x=>x.data);
+  DB.attempts=chk(at).map(x=>({id:x.id,sid:x.student_id,sheetId:x.sheet_id,score:x.score,total:x.total,date:x.created_at}));
+  DB.state=Object.fromEntries(chk(ap).map(x=>[x.key,x.value]));
+  DB.duty=DB.state.duty||{std:{},dates:{},off:{}};
+  DB.invites=inv.error?[]:inv.data;
+  SNAP.students=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));
+  SNAP.sheets=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));
+  SNAP.duty=JSON.stringify(DB.duty);
+}
+function save(){dirty=true;clearTimeout(pushTimer);pushTimer=setTimeout(push,500);setSync("busy")}
+async function push(){
+  pushTimer=null;if(!session||!loaded)return;if(pushing){again=true;return}pushing=true;
+  try{
+    const cs=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));
+    const up=DB.students.filter(x=>cs[x.id]!==SNAP.students[x.id]);
+    const del=Object.keys(SNAP.students).filter(id=>!(id in cs));
+    if(up.length){let r=await sb.from("students").upsert(up.map(studentRow));
+      if(r.error&&r.error.code==="23505"){up.filter(x=>!(x.id in SNAP.students)).forEach(x=>{x.code=newCode();cs[x.id]=JSON.stringify(x)});r=await sb.from("students").upsert(up.map(studentRow))}
+      chk(r);up.forEach(x=>SNAP.students[x.id]=cs[x.id])}
+    if(del.length){chk(await sb.from("students").delete().in("id",del));del.forEach(id=>delete SNAP.students[id])}
+    const ch=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));
+    const sup=DB.sheets.filter(x=>ch[x.id]!==SNAP.sheets[x.id]);
+    const sdel=Object.keys(SNAP.sheets).filter(id=>!(id in ch));
+    if(sup.length){chk(await sb.from("sheets").upsert(sup.map(x=>({id:x.id,data:x,updated_at:new Date().toISOString()}))));sup.forEach(x=>SNAP.sheets[x.id]=ch[x.id])}
+    if(sdel.length){chk(await sb.from("attempts").delete().in("sheet_id",sdel));chk(await sb.from("sheets").delete().in("id",sdel));sdel.forEach(id=>delete SNAP.sheets[id])}
+    const dj=JSON.stringify(DB.duty);
+    if(dj!==SNAP.duty){chk(await sb.from("app_state").upsert({key:"duty",value:DB.duty,updated_at:new Date().toISOString()}));SNAP.duty=dj}
+    if(!again)dirty=false;setSync("ok");
+  }catch(e){console.error(e);setSync("err");setTimeout(()=>{if(dirty&&!pushTimer)push()},8000)}
+  pushing=false;if(again){again=false;push()}
+}
+const editing=()=>{const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)};
+async function refresh(){
+  if(ui.mode!=="teacher"||!session||dirty||pushing||ui.sheet||editing())return;
+  try{await pull();if(!dirty&&!editing()&&!ui.sheet)render()}catch(e){}
+}
+setInterval(refresh,60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh()});
+async function enterTeacher(){
+  if(!session){ui.mode="auth";render();return}
+  ui.mode="loading";render();
+  try{
+    await pull();
+    if(!DB.teachers.some(t=>t.id===DB.me)){try{const r=await sb.rpc("claim_invite");if(r.data===true)await pull()}catch(e){}}
+    loaded=true;
+    if(!DB.teachers.some(t=>t.id===DB.me)){ui.mode="wait"}
+    else{ui.mode="teacher";ui.view="list";
+      if(me().group==="leitung"&&!DB.sheets.length&&!DB.state.seeded){DB.sheets=seedSheets();chk(await sb.from("app_state").upsert({key:"seeded",value:true}));DB.state.seeded=true;save()}}
+  }catch(e){console.error(e);ui.mode="auth";ui.authErr="Keine Verbindung zum Speicher. Prüfe dein Internet und versuch es noch einmal."}
+  render();
+}
+const authDe=m=>/Invalid login/i.test(m)?"E-Mail oder Passwort stimmt nicht.":/not confirmed/i.test(m)?"Bitte bestätige zuerst deine E-Mail (Link im Postfach).":/already registered/i.test(m)?"Für diese E-Mail gibt es schon ein Konto. Melde dich an.":/at least|Password should/i.test(m)?"Das Passwort braucht mindestens 8 Zeichen.":/rate limit/i.test(m)?"Zu viele Versuche. Warte ein paar Minuten.":/valid email|invalid format/i.test(m)?"Bitte eine gültige E-Mail-Adresse eintragen.":m;
+async function stuLogin(code){
+  const r=await sb.rpc("student_login",{p_code:code});if(r.error)throw r.error;if(!r.data)return false;
+  ui.stuInfo={id:r.data.id,first:r.data.first,klasse:r.data.klasse,group:r.data.grp};ui.code=code;
+  try{localStorage.setItem("kt-schule-code",code)}catch(e){}
+  await stuRefresh();return true;
+}
+async function stuRefresh(){const r=await sb.rpc("student_sheets",{p_code:ui.code});if(r.error)throw r.error;STU={sheets:r.data?.sheets||[],attempts:r.data?.attempts||[]}}
 
 /* ---------- Zustand ---------- */
 const ui={week:0,dutyMode:"week",dutyEdit:null,mode:"start",view:"list",sid:null,tab:"overview",q:"",filter:"alle",brush:"Mathe",sheet:null,confirm:null,stu:null,subj:null,quiz:null,loginErr:""};
-const stu=()=>DB.students.find(s=>s.id===ui.stu);
-const sheetsFor=s=>DB.sheets.filter(x=>x.groups.includes(s.group)&&s.klasse>=x.minK&&s.klasse<=x.maxK);
-const attemptsOf=(sid,shid)=>DB.attempts.filter(a=>a.sid===sid&&a.sheetId===shid).sort((a,b)=>b.date.localeCompare(a.date));
+const stu=()=>ui.stuInfo;
+const findSheet=id=>(ui.mode==="student"?STU.sheets:DB.sheets).find(x=>x.id===id);
+const sheetsFor=s=>(ui.mode==="student"?STU.sheets:DB.sheets).filter(x=>x.groups.includes(s.group)&&s.klasse>=x.minK&&s.klasse<=x.maxK);
+const attemptsOf=(sid,shid)=>(ui.mode==="student"?STU.attempts.map(a=>({...a,sid})):DB.attempts).filter(a=>a.sid===sid&&a.sheetId===shid).sort((a,b)=>b.date.localeCompare(a.date));
 const norm=t=>String(t).toLowerCase().replace(/,/g,".").replace(/\s+/g," ").trim();
 const scoreChip=a=>{if(!a)return'<span class="chip s-none">neu</span>';const p=a.score/a.total;return`<span class="chip ${p>=.8?"s-good":p>=.5?"s-warn":"s-bad"}">${a.score} von ${a.total} richtig</span>`};
-const me=()=>DB.teachers.find(t=>t.id===DB.me)||DB.teachers[0];
+const me=()=>DB.teachers.find(t=>t.id===DB.me)||{id:null,name:"?",group:"jungs"};
 const visible=()=>DB.students.filter(s=>me().group==="leitung"||s.group===me().group);
 const cur=()=>DB.students.find(s=>s.id===ui.sid);
 const $=s=>document.querySelector(s);
@@ -275,13 +351,15 @@ function gradeBadge(g){if(!g)return'<span class="muted">–</span>';return`<span
 function render(){
   const t=me(),R=$("#barRight");
   if(ui.mode==="teacher"){
-    R.innerHTML=`<button class="me g-${t.group}" data-act="team"><span class="dot">${esc(t.name[0]||"?")}</span>${esc(t.name)} · ${GROUPS[t.group].label}</button>`;
+    R.innerHTML=`<span id="sync" class="small muted"></span><button class="me g-${t.group}" data-act="team"><span class="dot">${esc(t.name[0]||"?")}</span>${esc(t.name)} · ${GROUPS[t.group].label}</button>`;
     $("#app").innerHTML=ui.view==="student"&&cur()?viewStudent():ui.view==="team"?viewTeam():ui.view==="tasks"?viewTasks():ui.view==="duty"?viewDuty():viewList();
   }else if(ui.mode==="student"&&stu()){
     R.innerHTML=`<button class="btn" data-act="home">Abmelden</button>`;
     $("#app").innerHTML=ui.quiz?viewQuiz():ui.subj?viewSubject():viewStuHome();
-  }else if(ui.mode==="pickTeacher"){
-    R.innerHTML="";$("#app").innerHTML=`<div class="head"><div class="eyebrow">Lehrkräfte</div><h1>Wer bist du?</h1></div><div class="cards">${DB.teachers.map(x=>`<button class="card g-${x.group}" data-act="pickT" data-id="${x.id}"><div class="row"><span class="dot">${esc(x.name[0]||"?")}</span><span class="name">${esc(x.name)}</span></div><div class="meta">${GROUPS[x.group].label} · ${GROUPS[x.group].days}</div></button>`).join("")}</div><div><button class="btn ghost" data-act="home">← Zurück</button></div>`;
+  }else if(ui.mode==="auth"){R.innerHTML="";$("#app").innerHTML=viewAuth();
+  }else if(ui.mode==="newpw"){R.innerHTML="";$("#app").innerHTML=`<div class="head"><div class="eyebrow">Lehrkräfte</div><h1>Neues Passwort</h1></div><form class="panel" data-form="newpw" style="max-width:420px"><label class="field">Neues Passwort (mindestens 8 Zeichen)<input id="np" type="password" autocomplete="new-password" minlength="8"></label>${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}<button class="btn primary big">Speichern</button></form>`;
+  }else if(ui.mode==="loading"){R.innerHTML="";$("#app").innerHTML=`<div class="empty">Lädt …</div>`;
+  }else if(ui.mode==="wait"){R.innerHTML="";$("#app").innerHTML=`<div class="head"><div class="eyebrow">Lehrkräfte</div><h1>Noch nicht freigeschaltet</h1></div><section class="panel" style="max-width:520px"><p style="margin:0">Dein Konto (${esc(session?.user?.email||"")}) ist angelegt. Die Leitung muss dich noch mit genau dieser E-Mail-Adresse unter „Team“ einladen.</p><div class="row"><button class="btn primary" data-act="retryWait">Erneut prüfen</button><button class="btn" data-act="logout">Abmelden</button></div></section>`;
   }else if(ui.mode==="login"){
     R.innerHTML="";$("#app").innerHTML=viewLogin();
   }else{
@@ -298,6 +376,21 @@ function viewStart(){
 }
 function navSeg(){return`<div class="seg" role="group" aria-label="Bereich"><button data-act="nav" data-v="list" aria-pressed="${ui.view==="list"}">Schüler</button><button data-act="nav" data-v="tasks" aria-pressed="${ui.view==="tasks"}">Aufgaben</button><button data-act="nav" data-v="duty" aria-pressed="${ui.view==="duty"}">Einsatzplan</button></div>`}
 
+/* ---------- Anmeldung Lehrkräfte ---------- */
+function viewAuth(){
+  const up=ui.authUp;
+  return`<div class="head"><div class="eyebrow">Lehrkräfte</div><h1>${up?"Konto erstellen":"Anmelden"}</h1>${up?'<p class="muted" style="margin:0">Nutze die E-Mail-Adresse, mit der dich die Leitung eingeladen hat.</p>':""}</div>
+  <form class="panel" data-form="auth" style="max-width:420px">
+    ${up?'<label class="field">Vorname<input id="au-name" autocomplete="given-name"></label>':""}
+    <label class="field">E-Mail<input id="au-mail" type="email" autocomplete="email" value="${esc(ui.authMail||"")}"></label>
+    <label class="field">Passwort${up?" (mindestens 8 Zeichen)":""}<input id="au-pw" type="password" autocomplete="${up?"new-password":"current-password"}"></label>
+    ${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}${ui.authMsg?`<p class="note" style="margin:0">${esc(ui.authMsg)}</p>`:""}
+    <button class="btn primary big" ${ui.busy?"disabled":""}>${up?"Konto erstellen":"Anmelden"}</button>
+    <div class="row"><button type="button" class="btn ghost" data-act="authToggle">${up?"Ich habe schon ein Konto":"Neues Konto erstellen"}</button>${up?"":'<button type="button" class="btn ghost" data-act="authReset">Passwort vergessen</button>'}</div>
+  </form>
+  <div><button class="btn ghost" data-act="home">← Zurück</button></div>`;
+}
+
 /* ---------- Schülerbereich ---------- */
 function viewLogin(){
   return`<div class="head"><div class="eyebrow">Schülerbereich</div><h1>Gib deinen Code ein</h1><p class="muted" style="margin:0">Den Code bekommst du von deinem Nachhilfelehrer oder deiner Nachhilfelehrerin.</p></div>
@@ -306,7 +399,7 @@ function viewLogin(){
     ${ui.loginErr?`<div class="err">${esc(ui.loginErr)}</div>`:""}
     <button class="btn primary big">Anmelden</button>
   </form>
-  <p class="note">Zum Ausprobieren: Yusufs Code steht im Lehrerbereich auf seiner Seite.</p>`;
+  <div><button class="btn ghost" data-act="home">← Zurück</button></div>`;
 }
 function viewStuHome(){
   const s=stu(),all=sheetsFor(s);
@@ -323,7 +416,7 @@ function viewSubject(){
   </div>`;
 }
 function viewQuiz(){
-  const Q=ui.quiz,sh=DB.sheets.find(x=>x.id===Q.sheetId);
+  const Q=ui.quiz,sh=findSheet(Q.sheetId);
   if(Q.i>=sh.items.length){
     const sc=Q.results.filter(Boolean).length,p=sc/sh.items.length;
     return`<div class="quiz sub-${sh.subject}"><div class="eyebrow">${esc(sh.subject)} · ${esc(sh.title)}</div>
@@ -345,7 +438,7 @@ function viewQuiz(){
     <div class="qtext">${esc(it.q)}</div>${body}${fb}</div>`;
 }
 function answerQ(given){
-  const Q=ui.quiz,sh=DB.sheets.find(x=>x.id===Q.sheetId),it=sh.items[Q.i];
+  const Q=ui.quiz,sh=findSheet(Q.sheetId),it=sh.items[Q.i];
   Q.given=given;Q.results[Q.i]=it.type==="choice"?given===it.correct:it.answers.some(a=>norm(a)===norm(given));
 }
 
@@ -610,20 +703,25 @@ function tabWork(s){
 }
 
 function viewTeam(){
-  const t=me();
-  return`<div class="row"><button class="btn ghost" data-act="back">← Alle Schüler</button><button class="btn" data-act="home">Abmelden</button></div>
-  <div class="head"><div class="eyebrow">Nachhilfe-Team</div><h1>Wer arbeitet gerade?</h1></div>
+  const t=me(),lead=t.group==="leitung";
+  const sel=x=>`<select data-tgroup="${x.id}" aria-label="Gruppe von ${esc(x.name)}" style="border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 6px">${Object.keys(GROUPS).map(g=>`<option value="${g}" ${x.group===g?"selected":""}>${GROUPS[g].label}</option>`).join("")}</select>`;
+  return`<div class="row"><button class="btn ghost" data-act="back">← Alle Schüler</button><button class="btn" data-act="logout">Abmelden</button></div>
+  <div class="head"><div class="eyebrow">Nachhilfe-Team</div><h1>Team</h1><p class="muted" style="margin:0">Angemeldet als ${esc(t.name)} · ${esc(session?.user?.email||"")}</p></div>
   <section class="panel">
-    <p class="small muted" style="margin:0">Lehrkräfte sehen nur ihre Gruppe: Jungs-Lehrer die Jungs (Di & Mi), Lehrerinnen die Mädchen (Do). Die Leitung sieht alle.</p>
-    <div class="tbl"><table><tbody>${DB.teachers.map(x=>`<tr class="g-${x.group}"><td><div class="row"><span class="dot">${esc(x.name[0]||"?")}</span><b>${esc(x.name)}</b></div></td><td><select data-tgroup="${x.id}" aria-label="Gruppe von ${esc(x.name)}" style="border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 6px">${Object.keys(GROUPS).map(g=>`<option value="${g}" ${x.group===g?"selected":""}>${GROUPS[g].label}</option>`).join("")}</select></td><td style="text-align:right">${x.id===t.id?'<span class="small muted">aktiv</span>':`<button class="btn" data-act="switch" data-id="${x.id}">Wechseln</button> ${DB.teachers.length>1?delBtn("teacher",x.id):""}`}</td></tr>`).join("")}</tbody></table></div>
-    <form class="form" data-form="teacher">
-      <label class="field">Name<input id="t-name" placeholder="Vorname"></label>
-      <label class="field">Gruppe<select id="t-group"><option value="jungs">Jungs</option><option value="maedchen">Mädchen</option><option value="leitung">Leitung</option></select></label>
-      <div><button class="btn primary">Lehrkraft hinzufügen</button></div>
-    </form>
+    <p class="small muted" style="margin:0">Lehrkräfte sehen nur ihre Gruppe: Jungs-Lehrer die Jungs (Di & Mi), Lehrerinnen die Mädchen (Do). Die Leitung sieht alle und lädt neue Lehrkräfte ein.</p>
+    <div class="tbl"><table><tbody>${DB.teachers.map(x=>`<tr class="g-${x.group}"><td><div class="row"><span class="dot">${esc(x.name[0]||"?")}</span><b>${esc(x.name)}</b>${x.id===t.id?' <span class="small muted">(du)</span>':""}</div></td><td>${lead&&x.id!==t.id?sel(x):`<span class="pill">${GROUPS[x.group].label}</span>`}</td><td style="text-align:right">${lead&&x.id!==t.id?delBtn("teacher",x.id):""}</td></tr>`).join("")}</tbody></table></div>
   </section>
-  ${DB.students.some(s=>s.example)?`<section class="panel"><h2>Beispiel-Schüler</h2><p class="small muted" style="margin:0">Yusuf, Emre und Elif sind nur zum Ausprobieren da. Die Beispiel-Aufgabenblätter bleiben, du kannst sie unter „Aufgaben“ einzeln löschen.</p><div>${ui.confirm==="examples"?'<button class="btn danger" data-act="delExamples">Wirklich alle Beispiele löschen</button>':'<button class="btn" data-act="ask" data-k="examples" data-id="">Beispiele löschen</button>'}</div></section>`:""}
-  <p class="note">Vorschau: Alles ist bisher nur auf diesem Gerät gespeichert. Im nächsten Schritt kommt der gemeinsame Online-Speicher mit eigenem Login pro Lehrkraft.</p>`;
+  ${lead?`<section class="panel"><h2>Lehrkraft einladen</h2>
+    <p class="small muted" style="margin:0">Danach öffnet die Person die App, tippt auf „Lehrkräfte“ → „Neues Konto erstellen“ und nutzt genau diese E-Mail-Adresse.</p>
+    <form class="form" data-form="invite">
+      <label class="field">Vorname<input id="iv-name" autocomplete="off"></label>
+      <label class="field">E-Mail<input id="iv-mail" type="email" autocomplete="off"></label>
+      <label class="field">Gruppe<select id="iv-group"><option value="jungs">Jungs</option><option value="maedchen">Mädchen</option><option value="leitung">Leitung</option></select></label>
+      <div><button class="btn primary">Einladen</button></div>
+    </form>
+    ${DB.invites.length?`<div class="tbl"><table><thead><tr><th>Eingeladen</th><th>E-Mail</th><th>Gruppe</th><th></th></tr></thead><tbody>${DB.invites.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.email)}</td><td>${GROUPS[i.grp].label}</td><td style="text-align:right"><button class="btn ghost" data-act="delInvite" data-v="${esc(i.email)}" aria-label="Einladung löschen">×</button></td></tr>`).join("")}</tbody></table></div>`:""}
+  </section>`:""}
+  <p class="note">Alles wird online gespeichert (Supabase) und ist auf allen Geräten gleich. Oben neben deinem Namen siehst du, ob gerade gespeichert wurde.</p>`;
 }
 
 /* ---------- Formular Schüler / Zeugnis ---------- */
@@ -695,17 +793,25 @@ document.addEventListener("click",e=>{
       else{const key=date+"|"+k;if(DB.duty.dates[key]===undefined)DB.duty.dates[key]=[...(DB.duty.std[dd+"-"+k]||[])];arr=DB.duty.dates[key]}
       const i=arr.indexOf(id);i>=0?arr.splice(i,1):arr.push(id);save();break}
     case"dutyReset":{const [date,,k]=v.split("|");delete DB.duty.dates[date+"|"+k];save();break}
-    case"home":ui.mode="start";ui.stu=null;ui.quiz=null;ui.subj=null;ui.sheet=null;ui.view="list";break;
-    case"asTeacher":ui.mode="pickTeacher";break;
-    case"pickT":DB.me=id;ui.filter="alle";save();ui.mode="teacher";ui.view="list";break;
-    case"asStudent":ui.mode="login";ui.loginErr="";render();$("#code")?.focus();return;
+    case"home":if(ui.mode==="student"){try{localStorage.removeItem("kt-schule-code")}catch(e){}ui.code=null;ui.stuInfo=null}ui.mode="start";ui.quiz=null;ui.subj=null;ui.sheet=null;ui.view="list";break;
+    case"asTeacher":ui.authErr="";ui.authMsg="";enterTeacher();return;
+    case"asStudent":{ui.loginErr="";let c=null;try{c=localStorage.getItem("kt-schule-code")}catch(e){}
+      if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"login";render()}).catch(()=>{ui.mode="login";ui.loginErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
+      ui.mode="login";render();$("#code")?.focus();return}
+    case"authToggle":ui.authUp=!ui.authUp;ui.authErr="";ui.authMsg="";break;
+    case"authReset":{const m=$("#au-mail").value.trim();if(!m){ui.authErr="Trag oben deine E-Mail ein, dann tippe noch einmal auf „Passwort vergessen“.";break}
+      sb.auth.resetPasswordForEmail(m,{redirectTo:location.origin+location.pathname}).then(r=>{ui.authMail=m;ui.authErr=r.error?authDe(r.error.message):"";ui.authMsg=r.error?"":"Wir haben dir einen Link zum Zurücksetzen geschickt.";render()});return}
+    case"logout":sb.auth.signOut().then(()=>{session=null;loaded=false;DB.students=[];ui.mode="start";ui.view="list";render()});return;
+    case"retryWait":enterTeacher();return;
+    case"delInvite":sb.from("teacher_invites").delete().eq("email",v).then(r=>{if(r.error)toast("Löschen hat nicht geklappt");DB.invites=DB.invites.filter(i=>i.email!==v);render()});return;
     case"nav":ui.view=v;ui.sid=null;break;
     case"subj":ui.subj=v||null;break;
     case"startQuiz":ui.quiz={sheetId:id,i:0,given:null,results:[]};scrollTo(0,0);break;
     case"quitQuiz":ui.quiz=null;break;
     case"choose":if(ui.quiz.given===null)answerQ(+v);break;
-    case"nextQ":{const Q=ui.quiz,sh=DB.sheets.find(x=>x.id===Q.sheetId);Q.i++;Q.given=null;
-      if(Q.i>=sh.items.length){DB.attempts.push({id:uid(),sid:ui.stu,sheetId:sh.id,date:new Date().toISOString(),score:Q.results.filter(Boolean).length,total:sh.items.length});save()}
+    case"nextQ":{const Q=ui.quiz,sh=findSheet(Q.sheetId);Q.i++;Q.given=null;
+      if(Q.i>=sh.items.length){const sc=Q.results.filter(Boolean).length;STU.attempts.unshift({sheetId:sh.id,score:sc,total:sh.items.length,date:new Date().toISOString()});
+        sb.rpc("student_submit",{p_code:ui.code,p_sheet:sh.id,p_score:sc,p_total:sh.items.length}).then(r=>{if(r.error||r.data!==true)toast("Ergebnis konnte nicht gespeichert werden")})}
       render();if(Q.i<sh.items.length)$("#ans")?.focus();return}
     case"newTask":return openTask(null);
     case"editTask":return openTask(DB.sheets.find(x=>x.id===id));
@@ -737,7 +843,7 @@ document.addEventListener("click",e=>{
       if(k==="exam")s.exams=s.exams.filter(x=>x.id!==id);
       if(k==="report")s.reports=s.reports.filter(x=>x.id!==id);
       if(k==="log")s.log=s.log.filter(x=>x.id!==id);
-      if(k==="teacher"){DB.teachers=DB.teachers.filter(x=>x.id!==id);for(const o of [DB.duty.std,DB.duty.dates])for(const kk in o)o[kk]=o[kk].filter(x=>x!==id)}
+      if(k==="teacher"){sb.from("teachers").delete().eq("id",id).then(r=>{if(r.error)toast("Entfernen hat nicht geklappt")});DB.teachers=DB.teachers.filter(x=>x.id!==id);for(const o of [DB.duty.std,DB.duty.dates])for(const kk in o)o[kk]=o[kk].filter(x=>x!==id)}
       ui.confirm=null;save();toast("Gelöscht");break}
     case"delExamples":{const gone=DB.students.filter(x=>x.example).map(x=>x.id);DB.students=DB.students.filter(x=>!x.example);DB.attempts=DB.attempts.filter(x=>!gone.includes(x.sid));}ui.confirm=null;save();toast("Beispiele gelöscht");break;
     case"delTag":s[a.dataset.k].splice(+a.dataset.i,1);save();break;
@@ -755,14 +861,32 @@ document.addEventListener("click",e=>{
 document.addEventListener("submit",e=>{
   const f=e.target.closest("[data-form]");if(!f)return;e.preventDefault();const s=cur();
   switch(f.dataset.form){
-    case"login":{const c=$("#code").value.trim().toUpperCase(),x=DB.students.find(y=>y.code===c);
-      if(!x){ui.loginErr=c?"Diesen Code gibt es nicht. Prüfe ihn noch einmal.":"Bitte gib deinen Code ein.";render();$("#code").focus();return}
-      ui.mode="student";ui.stu=x.id;ui.subj=null;ui.quiz=null;ui.loginErr="";render();return}
+    case"login":{const c=$("#code").value.trim().toUpperCase();
+      if(!c){ui.loginErr="Bitte gib deinen Code ein.";render();$("#code").focus();return}
+      stuLogin(c).then(ok=>{if(!ok){ui.loginErr="Diesen Code gibt es nicht. Prüfe ihn noch einmal.";render();$("#code").focus();return}
+        ui.mode="student";ui.subj=null;ui.quiz=null;ui.loginErr="";render()}).catch(()=>{ui.loginErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
+    case"auth":{const mail=$("#au-mail").value.trim(),pw=$("#au-pw").value,up=ui.authUp,name=up?$("#au-name").value.trim():"";
+      ui.authMail=mail;ui.authErr="";ui.authMsg="";
+      if(!mail||!pw){ui.authErr="Bitte E-Mail und Passwort eintragen.";render();return}
+      if(up&&!name){ui.authErr="Bitte deinen Vornamen eintragen.";render();return}
+      if(up&&pw.length<8){ui.authErr="Das Passwort braucht mindestens 8 Zeichen.";render();return}
+      ui.busy=true;render();
+      (up?sb.auth.signUp({email:mail,password:pw,options:{data:{name},emailRedirectTo:location.origin+location.pathname}}):sb.auth.signInWithPassword({email:mail,password:pw})).then(r=>{
+        ui.busy=false;
+        if(r.error){ui.authErr=authDe(r.error.message);render();return}
+        session=r.data.session;
+        if(!session){ui.authUp=false;ui.authMsg="Fast geschafft: Wir haben dir eine E-Mail geschickt. Tippe auf den Link darin und melde dich danach hier an.";render();return}
+        enterTeacher()});return}
+    case"newpw":{const pw=$("#np").value;if(pw.length<8){ui.authErr="Das Passwort braucht mindestens 8 Zeichen.";render();return}
+      sb.auth.updateUser({password:pw}).then(r=>{if(r.error){ui.authErr=authDe(r.error.message);render();return}toast("Passwort gespeichert");ui.authErr="";enterTeacher()});return}
+    case"invite":{const n=$("#iv-name").value.trim(),m=$("#iv-mail").value.trim().toLowerCase(),g=$("#iv-group").value;
+      if(!n||!m){toast("Bitte Vorname und E-Mail eintragen");return}
+      sb.from("teacher_invites").upsert({email:m,name:n,grp:g}).then(r=>{if(r.error){toast("Einladen hat nicht geklappt");return}
+        DB.invites=[...DB.invites.filter(i=>i.email!==m),{email:m,name:n,grp:g}];toast(n+" eingeladen");render()});return}
     case"answer":{const v=$("#ans").value.trim();if(!v)return;answerQ(v);render();return}
     case"tag":{const k=f.dataset.k,inp=$("#tag-"+k),t=inp.value.trim();if(!t)return;s[k].push(t);save();render();$("#tag-"+k).focus();return}
     case"exam":s.exams.push({id:uid(),subject:$("#ex-sub").value,kind:$("#ex-kind").value,date:$("#ex-date").value||today(),grade:$("#ex-grade").value,topic:$("#ex-topic").value.trim()});toast("Note gespeichert");break;
     case"log":s.log.push({id:uid(),date:$("#lg-date").value||today(),kind:$("#lg-kind").value,subject:$("#lg-sub").value,status:$("#lg-status").value,note:$("#lg-note").value.trim()});toast("Eintrag gespeichert");break;
-    case"teacher":{const n=$("#t-name").value.trim();if(!n){toast("Bitte einen Namen eintragen");return}DB.teachers.push({id:uid(),name:n,group:$("#t-group").value});toast(n+" hinzugefügt");break}
   }
   save();render();
 });
@@ -771,8 +895,11 @@ document.addEventListener("input",e=>{
   if(e.target.id==="q"){ui.q=e.target.value;const pos=e.target.selectionStart;render();const q=$("#q");q.focus();q.setSelectionRange(pos,pos)}
   if(e.target.id==="note"){const s=cur();s.note=e.target.value;clearTimeout(noteTimer);noteTimer=setTimeout(save,400)}
 });
-document.addEventListener("change",e=>{const g=e.target.dataset?.tgroup;if(!g)return;const t=DB.teachers.find(x=>x.id===g);t.group=e.target.value;if(!DB.teachers.some(x=>x.group==="leitung")){t.group="leitung";toast("Mindestens eine Person braucht die Leitung")}save();render()});
+document.addEventListener("change",e=>{const g=e.target.dataset?.tgroup;if(!g)return;const t=DB.teachers.find(x=>x.id===g),v=e.target.value;
+  sb.from("teachers").update({grp:v}).eq("id",g).then(r=>{if(r.error){toast("Ändern hat nicht geklappt");render();return}t.group=v;toast("Gruppe geändert");render()})});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&ui.sheet){ui.sheet=null;render()}});
+sb.auth.onAuthStateChange((ev,s2)=>{session=s2;if(ev==="PASSWORD_RECOVERY"){ui.mode="newpw";ui.authErr="";render()}});
+sb.auth.getSession().then(r=>{session=r.data.session;render()});
 render();
 </script>
 </body>

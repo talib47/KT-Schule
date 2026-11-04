@@ -13,6 +13,10 @@ Gruppen sind getrennt: Jungs (Di und Mi), Mädchen (Do). Lehrkräfte sehen nur i
 
 ## Speicher
 
-Vorschau-Stand: Alles liegt nur im Browser des jeweiligen Geräts (`localStorage`, Schlüssel `kt-lernzeit-v1`).
+Supabase (Projekt KT-Schule). Tabellen und Zugriffsregeln: `supabase/schema.sql`, danach `supabase/02_einladung.sql`.
 
-Schülerdaten gehören **nicht** in dieses Repo, es ist öffentlich. Für den Abgleich zwischen Geräten ist Supabase (EU-Server) mit eigenem Login pro Lehrkraft vorgesehen.
+- Lehrkräfte melden sich mit E-Mail und Passwort an. Das erste Konto wird Leitung, alle weiteren lädt die Leitung unter „Team“ ein.
+- Jungs-Lehrer sehen nur Jungs, Mädchen-Lehrerinnen nur Mädchen, die Leitung alle (Regeln in der Datenbank, nicht nur in der App).
+- Schüler kommen nur über ihren Code an die Aufgaben ihrer Klasse und Gruppe und können nur Ergebnisse abgeben.
+- Der Schlüssel im Code ist der öffentliche anon-Schlüssel. Den service_role-Schlüssel niemals hier eintragen.
+- Schülerdaten gehören nie in dieses Repo.

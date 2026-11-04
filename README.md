@@ -6,14 +6,16 @@ Eine Datei (`index.html`), Vanilla-JS, kein Framework.
 
 ## Zwei Bereiche
 
-- **Lehrkräfte:** Schüler anlegen und entfernen (Schulform ist Pflicht), Noten, Zeugnisse, Stundenplan als Raster, Stärken und Schwächen, Lernzeit bzw. Hausaufgaben mit Nacharbeit, Übungsaufgaben für Deutsch, Englisch und Mathe, Einsatzplan (Regelplan und Wochen).
-- **Schüler:** Anmeldung mit sechsstelligem Code, nur Übungsaufgaben ihrer Klasse und Gruppe.
+- **Schüler** (Anmeldung mit sechsstelligem Code): Heute (tägliche Übungsrunde: Fehler von neulich, neue Blätter der Lehrkräfte, Förderziele), Üben (schnelle Runde, Fehler wiederholen, nach Fach), Fortschritt. Viele kurze Aufgaben hintereinander; Mathe-Themen erzeugen immer neue Zahlen; falsche Aufgaben kommen in derselben Runde bis zu zweimal wieder.
+- **Lehrkräfte** (E-Mail und Passwort): Schüler (Förderziele, Lernstand in der App, Noten und Zeugnisse, Lernzeit bzw. Hausaufgaben, Einschätzung, Stundenplan, Code), Aufgaben (eigene Blätter, automatische Themen), Plan (Termine mit Wechsel, Team).
 
-Gruppen sind getrennt: Jungs (Di und Mi), Mädchen (Do). Lehrkräfte sehen nur ihre Gruppe, die Leitung sieht alle.
+Gruppen sind getrennt: Jungs-Lehrer sehen nur Jungs, Lehrerinnen nur Mädchen, die Leitung alle.
+
+Gestaltung angelehnt an „Die Reihe“ der Uni-Lern-Apps (ruhige Flächen, Platte „Heute“ in Petrol, Newsreader, Glas-Tableiste, Lernmodus ohne Ablenkung). Außerhalb von github.io läuft die App als Vorschau mit Beispieldaten nur im Gerät.
 
 ## Speicher
 
-Supabase (Projekt KT-Schule). Tabellen und Zugriffsregeln: `supabase/schema.sql`, danach `supabase/02_einladung.sql`.
+Supabase (Projekt KT-Schule). Tabellen und Zugriffsregeln: `supabase/schema.sql`, danach `02_einladung.sql` und `03_lernstand.sql`.
 
 - Lehrkräfte melden sich mit E-Mail und Passwort an. Das erste Konto wird Leitung, alle weiteren lädt die Leitung unter „Team“ ein.
 - Jungs-Lehrer sehen nur Jungs, Mädchen-Lehrerinnen nur Mädchen, die Leitung alle (Regeln in der Datenbank, nicht nur in der App).

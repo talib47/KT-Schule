@@ -572,6 +572,7 @@ async function enterTeacher(){
     await pull();
     if(!DB.teachers.some(t=>t.id===DB.me)){try{const r=await sb.rpc("claim_invite");if(r.data===true)await pull()}catch(e){}}
     loaded=true;
+    if(lead()){try{const r=await sb.rpc("team_code");DB.teamCode=r.data||""}catch(e){}}
     if(!DB.teachers.some(t=>t.id===DB.me))ui.mode="wait";
     else{ui.mode="teacher";ui.tab="students";
       if(lead()&&!DB.sheets.length&&!DB.state.seeded){DB.sheets=seedSheets();chk(await sb.from("app_state").upsert({key:"seeded",value:true}));DB.state.seeded=true;save()}}
@@ -684,9 +685,10 @@ function viewCode(){
 function viewAuth(){
   const up=ui.authUp;
   return`<button class="crumb" data-act="home">‹ Zurück</button><h1>${up?"Konto erstellen":"Anmelden"}</h1>
-  ${up?`<div class="infoline" style="margin:-6px 0 12px">${info("inv","Nur mit der E-Mail-Adresse, mit der dich die Leitung eingeladen hat.")}</div>`:""}
   <form id="fauth" class="block" style="display:grid;gap:14px">
-    ${up?'<label class="f">Vorname<input id="au-name" autocomplete="given-name"></label>':""}
+    ${up?`<label class="f">Vorname<input id="au-name" autocomplete="given-name" value="${esc(ui.authName||"")}"></label>
+    <div class="f">Ich betreue${choice("authGrp",[["jungs","Jungs"],["maedchen","Mädchen"]],ui.authGrp)}</div>
+    <label class="f"><span class="infoline">Teamcode ${info("tc","Bekommst du von der Leitung.")}</span><input id="au-code" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${esc(ui.authCode||"")}"></label>`:""}
     <label class="f">E-Mail<input id="au-mail" type="email" autocomplete="email" value="${esc(ui.authMail||"")}"></label>
     <label class="f">Passwort${up?" (mindestens 8 Zeichen)":""}<input id="au-pw" type="password" autocomplete="${up?"new-password":"current-password"}"></label>
     ${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}${ui.authMsg?`<p class="note2">${esc(ui.authMsg)}</p>`:""}
@@ -695,7 +697,11 @@ function viewAuth(){
   <div class="row"><button class="btn ghost small" data-act="authToggle">${up?"Ich habe schon ein Konto":"Neues Konto erstellen"}</button>${up?"":'<button class="btn ghost small" data-act="authReset">Passwort vergessen</button>'}</div>`;
 }
 function viewNewPw(){return`<h1>Neues Passwort</h1><form id="fnewpw" class="block" style="display:grid;gap:14px"><label class="f">Neues Passwort (mindestens 8 Zeichen)<input id="np" type="password" autocomplete="new-password"></label>${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}<button class="btn wide">Speichern</button></form>`}
-function viewWait(){return`<h1>Noch nicht freigeschaltet</h1><div class="block" style="display:grid;gap:14px"><p>Dein Konto (${esc(session?.user?.email||"")}) ist angelegt. Die Leitung muss dich unter „Plan“ → „Team“ noch mit genau dieser E-Mail-Adresse einladen.</p><div class="row"><button class="btn" data-act="retryWait">Erneut prüfen</button><button class="btn ghost" data-act="logout">Abmelden</button></div></div>`}
+function viewWait(){return`<h1>Fast geschafft</h1><form id="fjoin" class="block" style="display:grid;gap:14px">
+  <div class="f">Ich betreue${choice("authGrp",[["jungs","Jungs"],["maedchen","Mädchen"]],ui.authGrp)}</div>
+  <label class="f"><span class="infoline">Teamcode ${info("tc2","Bekommst du von der Leitung.")}</span><input id="jn-code" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+  ${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}<button class="btn wide">Beitreten</button></form>
+  <div class="row"><button class="btn ghost small" data-act="logout">Abmelden</button></div>`}
 
 /* ---------- Schülerbereich: Ansichten ---------- */
 const MARK=`<svg class="mark" viewBox="-220 -190 440 330" aria-hidden="true"><path d="M -195,-138 C -165,-102 -128,-92 -100,-100 C -72,-108 -40,-124 -14,-132 C -75,-95 -125,-20 -112,60 C -108,90 -100,112 -92,128 C -160,100 -212,30 -212,-40 C -212,-82 -205,-115 -195,-138 Z"/><path d="M 195,-138 C 165,-102 128,-92 100,-100 C 72,-108 40,-124 14,-132 C 75,-95 125,-20 112,60 C 108,90 100,112 92,128 C 160,100 212,30 212,-40 C 212,-82 205,-115 195,-138 Z"/><circle cx="-130" cy="-152" r="30"/><circle cx="130" cy="-152" r="30"/><path d="M -80,130 L -80,0 C -80,-58 -22,-72 0,-106 C 22,-72 80,-58 80,0 L 80,130 L 40,130 L 40,4 C 40,-32 14,-48 0,-64 C -14,-48 -40,-32 -40,4 L -40,130 Z"/></svg>`;
@@ -976,7 +982,8 @@ function viewPlan(){
   ${up.length?html:`<div class="block empty">Keine Termine geplant. Tippe auf „Termin“.</div>`}
   ${icsBtn?`<div class="row" style="margin-top:12px">${icsBtn}</div>`:""}
   ${past.length?`<details class="block" style="margin-top:12px"><summary>Vergangene Termine</summary><div>${past.map(e=>termRow(e,1)).join("")}</div></details>`:""}
-  <div class="sect"><span>Team</span>${CLOUD&&lead()?`<button class="btn ghost small" data-act="invite">Einladen</button>`:""}</div>
+  <div class="sect"><span>Team</span></div>
+  ${CLOUD&&lead()&&DB.teamCode?`<div class="block row" style="justify-content:space-between"><span class="infoline">Teamcode ${info("tc3","Neue Lehrkräfte geben ihn bei der Registrierung ein. Ändern sperrt den alten Code.")}</span><span class="row" style="gap:8px"><span class="codebig">${esc(DB.teamCode)}</span><button class="btn ghost small" data-act="newCode">Ändern</button></span></div>`:""}
   <div class="list">${DB.teachers.map(t=>`<button class="item" data-act="teacher" data-v="${t.id}" ${lead()?"":"disabled"}>${av(t.name,t.group)}<span class="t">${esc(t.name)}${t.id===DB.me?' <span class="small muted">(du)</span>':""}</span><span class="r">${lead()?"›":""}</span><span class="d">${GROUPS[t.group].label}</span></button>`).join("")}
   ${DB.invites.map(i=>`<div class="item">${ibadge("mail","--c3")}<span class="t">${esc(i.name)}</span><span class="r">${delBtn("invite",i.email)}</span><span class="d">eingeladen · ${esc(i.email)} · ${GROUPS[i.grp].label}</span></div>`).join("")}</div>
   <div class="row" style="justify-content:center;margin-top:18px"><button class="btn ghost small" data-act="logout">${CLOUD?"Abmelden":"Beenden"}</button></div>`;
@@ -1081,6 +1088,7 @@ document.addEventListener("click",e=>{
     case"asStudent":{const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
       ui.mode="code";ui.codeErr="";render(true);$("#code")?.focus();return}
     case"asTeacher":ui.authErr="";ui.authMsg="";enterTeacher();return;
+    case"authGrp":if($("#au-name")){ui.authName=$("#au-name").value;ui.authCode=$("#au-code").value;ui.authMail=$("#au-mail").value}ui.authGrp=v;break;
     case"authToggle":ui.authUp=!ui.authUp;ui.authErr="";ui.authMsg="";break;
     case"authReset":{const m=$("#au-mail").value.trim();if(!m){ui.authErr="Trag oben deine E-Mail ein und tippe dann noch einmal auf „Passwort vergessen“.";break}
       sb.auth.resetPasswordForEmail(m,{redirectTo:location.origin+location.pathname}).then(x=>{ui.authMail=m;ui.authErr=x.error?authDe(x.error.message):"";ui.authMsg=x.error?"":"Wir haben dir einen Link zum Zurücksetzen geschickt.";render()});return}
@@ -1188,6 +1196,7 @@ document.addEventListener("click",e=>{
     case"mDelTerm":removeTerm(v);ui.sheet=null;break;
     case"mDelTask":removeSheet(v);ui.sheet=null;break;
     case"mDelDoc":removeDoc(v);ui.sheet=null;break;
+    case"newCode":{const c=Array.from({length:6},()=>pick([...CODECH])).join("");sb.rpc("set_team_code",{p_code:c}).then(x=>{if(x.data===true){DB.teamCode=c;toast("Neuer Teamcode")}else toast("Ändern hat nicht geklappt");render()});return}
     case"info":if(sh?.type==="task")readTask();if(sh?.type==="invite")sh.d.keep={n:$("#iv-name").value,m:$("#iv-mail").value};ui.info=ui.info===v?null:v;break;
     case"close":ui.sheet=null;break;
     default:return;
@@ -1204,11 +1213,14 @@ document.addEventListener("submit",e=>{
     stuLogin(c).then(ok=>{if(!ok){ui.codeErr="Diesen Code gibt es nicht. Prüfe ihn noch einmal.";render();$("#code").focus();return}ui.mode="student";ui.stab="home";ui.codeErr="";render(true)}).catch(()=>{ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
   if(id==="tform"&&ui.run&&!ui.run.state){const g=$("#tin").value.trim();if(g){ui.run.inp=g;answer(g)}return}
   if(id==="ftag"){$("[data-act=saveTag]").click();return}
-  if(id==="fauth"){const mail=$("#au-mail").value.trim(),pw=$("#au-pw").value,up=ui.authUp,name=up?$("#au-name").value.trim():"";
+  if(id==="fjoin"){const c=$("#jn-code").value.trim();if(!ui.authGrp||!c){ui.authErr="Bitte Gruppe und Teamcode angeben.";render();return}
+    sb.rpc("join_team",{p_code:c,p_grp:ui.authGrp}).then(x=>{if(x.data===true){ui.authErr="";enterTeacher()}else{ui.authErr="Der Teamcode stimmt nicht.";render()}});return}
+  if(id==="fauth"){const mail=$("#au-mail").value.trim(),pw=$("#au-pw").value,up=ui.authUp,name=up?$("#au-name").value.trim():"",code=up?$("#au-code").value.trim().toUpperCase():"";
+    if(up){ui.authName=name;ui.authCode=code;if(!ui.authGrp){ui.authErr="Bitte wählen, ob du Jungs oder Mädchen betreust.";render();return}if(!code){ui.authErr="Bitte den Teamcode eintragen.";render();return}}
     ui.authMail=mail;ui.authErr="";ui.authMsg="";
     if(!mail||!pw){ui.authErr="Bitte E-Mail und Passwort eintragen.";render();return}if(up&&!name){ui.authErr="Bitte deinen Vornamen eintragen.";render();return}if(up&&pw.length<8){ui.authErr="Das Passwort braucht mindestens 8 Zeichen.";render();return}
     ui.busy=true;render();
-    (up?sb.auth.signUp({email:mail,password:pw,options:{data:{name},emailRedirectTo:location.origin+location.pathname}}):sb.auth.signInWithPassword({email:mail,password:pw})).then(x=>{
+    (up?sb.auth.signUp({email:mail,password:pw,options:{data:{name,grp:ui.authGrp,team_code:code},emailRedirectTo:location.origin+location.pathname}}):sb.auth.signInWithPassword({email:mail,password:pw})).then(x=>{
       ui.busy=false;if(x.error){ui.authErr=authDe(x.error.message);render();return}session=x.data.session;
       if(!session){ui.authUp=false;ui.authMsg="Fast geschafft: Wir haben dir eine E-Mail geschickt. Tippe auf den Link darin und melde dich danach hier an.";render();return}enterTeacher()});return}
   if(id==="fnewpw"){const pw=$("#np").value;if(pw.length<8){ui.authErr="Das Passwort braucht mindestens 8 Zeichen.";render();return}
@@ -1231,7 +1243,7 @@ document.addEventListener("keydown",e=>{
 });
 /* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
    Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
-const VERSION="f820f9d2b8";
+const VERSION="95690dc370";
 async function checkUpdate(){
   if(!CLOUD)return;
   try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();

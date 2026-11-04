@@ -1,4 +1,4 @@
-# KT Lernzeit
+# KT Schule
 
 App für Nachhilfe und Lernzeit von KT Jugend (Kocatepe Gençlik Ruhrort).
 

@@ -363,6 +363,10 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .soon .sb{width:64px;height:64px;border-radius:20px}
 .soon .sb svg{width:32px;height:32px}
 .soon h1{margin:6px 0 0}
+.appbar{display:flex;align-items:center;margin:-6px 0 10px}
+.homebtn{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:4px 10px 4px 0;min-height:44px;font:600 .9375rem/1 var(--sans);color:var(--muted)}
+.homebtn img{width:30px;height:30px;border-radius:8px}
+.homebtn:active{opacity:.5}
 </style>
 </head>
 <body>
@@ -654,7 +658,7 @@ const TASKS_OPEN=false;
 const isPreview=()=>lsGet("kt-schule-lead")==="1";
 const tasksLocked=()=>!TASKS_OPEN&&!(ui.mode==="teacher"?lead():isPreview());
 function viewSoon(who){
-  return`<div class="soon">${ibadge("bolt","--c2")}<h1>Bald da</h1><p class="muted">${who==="stu"?"Hier kannst du bald üben. Wir sagen dir Bescheid!":"Dieser Bereich wird gerade programmiert."}</p>${who==="stu"?`<button class="btn ghost small" data-act="home">Zurück</button>`:""}</div>`;
+  return`<div class="soon">${ibadge("bolt","--c2")}<h1>Bald da</h1><p class="muted">${who==="stu"?"Hier kannst du bald üben. Wir sagen dir Bescheid!":"Dieser Bereich wird gerade programmiert."}</p>${who==="stu"?`<button class="btn ghost small" data-act="toStart">Zurück</button>`:""}</div>`;
 }
 function renderInner(anim){
   const app=$("#app"),nav=$("#nav"),fb=$("#fbar");
@@ -675,11 +679,14 @@ function renderInner(anim){
   else if(ui.mode==="wait")html=viewWait();
   else if(ui.mode==="loading")html=`<div class="empty">Lädt …</div>`;
   else html=viewStart();
+  if((ui.mode==="teacher"&&!ui.sid)||(ui.mode==="student"&&STU&&!ui.run&&!ui.subj&&!tasksLocked()))html=APPBAR+html;
   app.innerHTML=html;
   try{renderSheet()}catch(err){console.error(err);ui.sheet=null;$("#layer").innerHTML="";toast("Das Fenster ließ sich nicht öffnen.")}
   if(anim){app.classList.remove("vin");void app.offsetWidth;app.classList.add("vin")}
 }
 const LOGO=`<img class="logo" src="icon.svg" alt="Kocatepe Gençlik Ruhrort" width="88" height="88">`;
+/* Kleine Leiste oben: Logo führt zurück zur Startseite (Schüler / Lehrkräfte), ohne abzumelden */
+const APPBAR=`<div class="appbar"><button class="homebtn" data-act="toStart" aria-label="Zur Startseite"><img src="icon.svg" alt="" width="30" height="30"><span>KT Schule</span></button></div>`;
 function viewStart(){
   return`<div class="startwrap">${LOGO}<h1>KT Schule</h1>
     <button class="door kid" data-act="asStudent">${MARK}<b>Schüler</b><span class="go">›</span></button>
@@ -1100,7 +1107,10 @@ document.addEventListener("click",e=>{
     case"home":if(ui.mode==="student"){lsDel("kt-schule-code");STU=null;P=null}ui.mode="start";ui.run=null;ui.sheet=null;ui.sid=null;render(true);scrollTo(0,0);return;
     case"asStudent":{const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
       ui.mode="code";ui.codeErr="";render(true);$("#code")?.focus();return}
-    case"asTeacher":ui.authErr="";ui.authMsg="";enterTeacher();return;
+    case"asTeacher":ui.authErr="";ui.authMsg="";
+      if(CLOUD&&loaded&&session&&DB.teachers.some(t=>t.id===DB.me)){ui.mode="teacher";render(true);refresh();return}
+      enterTeacher();return;
+    case"toStart":ui.mode="start";ui.sheet=null;ui.run=null;ui.subj=null;render(true);scrollTo(0,0);return;
     case"authGrp":if($("#au-name")){ui.authName=$("#au-name").value;ui.authCode=$("#au-code").value;ui.authMail=$("#au-mail").value}ui.authGrp=v;break;
     case"authToggle":ui.authUp=!ui.authUp;ui.authErr="";ui.authMsg="";break;
     case"authReset":{const m=$("#au-mail").value.trim();if(!m){ui.authErr="Trag oben deine E-Mail ein und tippe dann noch einmal auf „Passwort vergessen“.";break}
@@ -1253,8 +1263,9 @@ function goBack(){
   if(ui.mode==="student"&&ui.stab!=="home"){ui.stab="home";render(true);return true}
   if(ui.mode==="teacher"&&ui.sid){ui.sid=null;render(true);return true}
   if(ui.mode==="teacher"&&ui.tab!=="students"){ui.tab="students";render(true);return true}
+  if(ui.mode==="teacher"||(ui.mode==="student"&&!tasksLocked())){ui.mode="start";render(true);return true}
   if(["code","auth"].includes(ui.mode)){ui.mode="start";render(true);return true}
-  if(ui.mode==="student"&&tasksLocked()){$("[data-act=home]")?.click();return true}
+  if(ui.mode==="student"&&tasksLocked()){ui.mode="start";render(true);return true}
   return false;
 }
 let sw=null;
@@ -1277,7 +1288,7 @@ document.addEventListener("keydown",e=>{
 });
 /* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
    Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
-const VERSION="792a57d7f5";
+const VERSION="dd14384157";
 async function checkUpdate(){
   if(!CLOUD)return;
   try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();

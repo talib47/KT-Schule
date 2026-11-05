@@ -192,3 +192,7 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .soon .sb{width:64px;height:64px;border-radius:20px}
 .soon .sb svg{width:32px;height:32px}
 .soon h1{margin:6px 0 0}
+.appbar{display:flex;align-items:center;margin:-6px 0 10px}
+.homebtn{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:4px 10px 4px 0;min-height:44px;font:600 .9375rem/1 var(--sans);color:var(--muted)}
+.homebtn img{width:30px;height:30px;border-radius:8px}
+.homebtn:active{opacity:.5}

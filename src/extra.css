@@ -196,3 +196,11 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .homebtn{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:4px 10px 4px 0;min-height:44px;font:600 .9375rem/1 var(--sans);color:var(--muted)}
 .homebtn img{width:30px;height:30px;border-radius:8px}
 .homebtn:active{opacity:.5}
+/* Pflichtfelder: kleiner Punkt am Namen, rot wenn beim Speichern leer */
+.f.req::after{content:none}
+.f.req{position:relative}
+.f.req>:first-child{}
+.f.miss{color:var(--bad)}
+.f.miss input,.f.miss select{border-color:color-mix(in srgb,var(--bad) 70%,transparent);background:var(--bad-soft)}
+.f.miss .choice{border-radius:14px;outline:1.5px solid color-mix(in srgb,var(--bad) 70%,transparent);outline-offset:4px}
+@media (prefers-reduced-motion:no-preference){.f.miss{animation:shake .3s ease-in-out}@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}}

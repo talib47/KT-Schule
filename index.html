@@ -367,6 +367,14 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .homebtn{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:4px 10px 4px 0;min-height:44px;font:600 .9375rem/1 var(--sans);color:var(--muted)}
 .homebtn img{width:30px;height:30px;border-radius:8px}
 .homebtn:active{opacity:.5}
+/* Pflichtfelder: kleiner Punkt am Namen, rot wenn beim Speichern leer */
+.f.req::after{content:none}
+.f.req{position:relative}
+.f.req>:first-child{}
+.f.miss{color:var(--bad)}
+.f.miss input,.f.miss select{border-color:color-mix(in srgb,var(--bad) 70%,transparent);background:var(--bad-soft)}
+.f.miss .choice{border-radius:14px;outline:1.5px solid color-mix(in srgb,var(--bad) 70%,transparent);outline-offset:4px}
+@media (prefers-reduced-motion:no-preference){.f.miss{animation:shake .3s ease-in-out}@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}}
 </style>
 </head>
 <body>
@@ -1017,14 +1025,14 @@ function renderSheet(){
   const s=cur(),d=sh.d||{};let body="";
   const head=(t)=>`<div class="bh"><h2>${t}</h2><button class="btn ghost small" data-act="close">Schließen</button></div>`;
   const err=sh.err?`<div class="err">${esc(sh.err)}</div>`:"";
-  if(sh.type==="student"){const lock=!lead();
-    body=head(sh.isNew?"Schüler hinzufügen":"Schüler bearbeiten")+`<div class="fg"><label class="f">Vorname<input id="s-first" value="${esc(d.first)}" autocomplete="off"></label><label class="f">Nachname<input id="s-last" value="${esc(d.last)}" autocomplete="off"></label>
+  if(sh.type==="student"){const lock=!lead(),m=k=>(sh.miss||[]).includes(k)?" miss":"";
+    body=head(sh.isNew?"Schüler hinzufügen":"Schüler bearbeiten")+`<div class="fg"><label class="f req${m("first")}">Vorname<input id="s-first" value="${esc(d.first)}" autocomplete="off"></label><label class="f req${m("last")}">Nachname<input id="s-last" value="${esc(d.last)}" autocomplete="off"></label>
       <label class="f">Klasse<select id="s-kl">${opt(Array.from({length:10},(_,i)=>i+1),d.klasse)}</select></label>
       <label class="f">Gruppe<select id="s-grp" ${lock?"disabled":""}>${opt([["jungs","Jungs"],["maedchen","Mädchen"]],d.group)}</select></label></div>
-      <div class="f">Schulform${choice("sForm",SCHULFORMEN,d.schulform)}</div>
-      <div class="f">Kommt am${choice("sCome",COME,d.come)}</div>
+      <div class="f req${m("schulform")}">Schulform${choice("sForm",SCHULFORMEN,d.schulform)}</div>
+      <div class="f req${m("come")}">Kommt am${choice("sCome",COME,d.come)}</div>
       <label class="f">Schule<input id="s-schule" value="${esc(d.schule)}" autocomplete="off"></label>
-      <div class="f">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div>${err}
+      <div class="f req${m("subjects")}">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div>${err}
       <div class="row" style="justify-content:space-between"><button class="btn" data-act="saveStudent">${sh.isNew?"Hinzufügen":"Speichern"}</button>${sh.isNew?"":ui.confirm==="student"?`<button class="btn warn" data-act="delStudent">Wirklich entfernen</button>`:`<button class="btn warn" data-act="ask" data-k="student" data-v="">Entfernen</button>`}</div>`}
   if(sh.type==="exam")body=head("Note eintragen")+`<div class="fg"><label class="f">Fach<select id="e-sub">${opt(s.subjects)}</select></label><label class="f">Art<select id="e-kind">${opt(["Klassenarbeit","Test","Mündlich","Referat"])}</select></label>
     <label class="f">Datum<input id="e-date" type="date" value="${today()}"></label><label class="f">Note<select id="e-grade">${opt(GRADES,"3")}</select></label></div>
@@ -1076,6 +1084,7 @@ function renderSheet(){
   L.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${body}</div></div>`;
 }
 function readTask(){const d=ui.sheet.d;d.title=$("#tk-title").value.trim();d.minK=+$("#tk-min").value;d.maxK=+$("#tk-max").value;d.items.forEach((it,i)=>{it.q=$("#ti-q"+i).value;if(it.type==="choice")it.optText=$("#ti-o"+i).value;else it.ansText=$("#ti-a"+i).value})}
+function unmiss(k,ok){const sh=ui.sheet;if(!sh?.miss)return;if(ok)sh.miss=sh.miss.filter(x=>x!==k);else if(!sh.miss.includes(k))sh.miss.push(k);if(!sh.miss.length)sh.err=""}
 function readStudent(){const d=ui.sheet.d;d.first=$("#s-first").value.trim();d.last=$("#s-last").value.trim();d.klasse=+$("#s-kl").value;if(!$("#s-grp").disabled)d.group=$("#s-grp").value;d.schule=$("#s-schule").value.trim()}
 function readTerm(){const d=ui.sheet.d;d.date=$("#tm-date").value;d.time=$("#tm-time").value.trim();d.note=$("#tm-note").value.trim();if($("#tm-n"))d.n=+$("#tm-n").value;if($("#tm-alt"))d.alt=$("#tm-alt").checked}
 const toggle=(arr,v)=>{const i=arr.indexOf(v);i>=0?arr.splice(i,1):arr.push(v)};
@@ -1140,11 +1149,13 @@ document.addEventListener("click",e=>{
     case"back":ui.sid=null;render(true);return;
     case"newStudent":ui.sheet={type:"student",isNew:1,d:{first:"",last:"",klasse:5,group:lead()?(ui.filter==="maedchen"?"maedchen":"jungs"):me().group,schulform:"",schule:"",come:[],subjects:["Deutsch","Englisch","Mathe"]}};break;
     case"editStudent":ui.sheet={type:"student",d:JSON.parse(JSON.stringify(s))};break;
-    case"sForm":readStudent();sh.d.schulform=v;break;
-    case"sCome":readStudent();toggle(sh.d.come,v);break;
-    case"sSub":readStudent();toggle(sh.d.subjects,v);break;
+    case"sForm":readStudent();sh.d.schulform=v;unmiss("schulform",1);break;
+    case"sCome":readStudent();toggle(sh.d.come,v);unmiss("come",sh.d.come.length);break;
+    case"sSub":readStudent();toggle(sh.d.subjects,v);unmiss("subjects",sh.d.subjects.length);break;
     case"saveStudent":{readStudent();const d=sh.d;
-      if(!d.first){sh.err="Bitte einen Vornamen eintragen.";break}if(!d.schulform){sh.err="Bitte die Schulform wählen.";break}if(!d.subjects.length){sh.err="Bitte mindestens ein Fach wählen.";break}
+      sh.miss=[!d.first&&"first",!d.last&&"last",!d.schulform&&"schulform",!(d.come||[]).length&&"come",!d.subjects.length&&"subjects"].filter(Boolean);
+      if(sh.miss.length){sh.err="Bitte die rot markierten Felder ausfüllen.";render();navigator.vibrate?.([10,40,10]);document.querySelector("#layer .miss")?.scrollIntoView({block:"center",behavior:"smooth"});return}
+      sh.err="";
       if(sh.isNew){const n={id:uid(),code:newCode(),created:today(),note:"",strengths:[],focus:[],exams:[],reports:[],plan:{},log:[],goals:[],...d};DB.students.push(n);ui.sid=n.id;toast(d.first+" hinzugefügt")}
       else{Object.assign(s,{first:d.first,last:d.last,klasse:d.klasse,group:d.group,schule:d.schule,schulform:d.schulform,subjects:d.subjects,come:d.come});toast("Gespeichert")}
       ui.sheet=null;save();break}
@@ -1251,6 +1262,7 @@ document.addEventListener("submit",e=>{
 });
 let noteT;
 document.addEventListener("input",e=>{
+  if((e.target.id==="s-first"||e.target.id==="s-last")&&ui.sheet?.miss){const k=e.target.id==="s-first"?"first":"last";if(e.target.value.trim()){ui.sheet.miss=ui.sheet.miss.filter(x=>x!==k);e.target.closest(".f").classList.remove("miss");if(!ui.sheet.miss.length){ui.sheet.err="";document.querySelector("#layer .err")?.remove()}}}
   if(e.target.id==="tin"&&ui.run)ui.run.inp=e.target.value;
   if(e.target.id==="note"){cur().note=e.target.value;clearTimeout(noteT);noteT=setTimeout(save,500)}
   if(e.target.id==="q"){ui.q=e.target.value;const p=e.target.selectionStart;render();const q=$("#q");q.focus();q.setSelectionRange(p,p)}
@@ -1293,7 +1305,7 @@ document.addEventListener("keydown",e=>{
 });
 /* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
    Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
-const VERSION="a8a0de724b";
+const VERSION="8a6943f0af";
 async function checkUpdate(){
   if(!CLOUD)return;
   try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();

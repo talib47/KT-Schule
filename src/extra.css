@@ -204,3 +204,21 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .f.miss input,.f.miss select{border-color:color-mix(in srgb,var(--bad) 70%,transparent);background:var(--bad-soft)}
 .f.miss .choice{border-radius:14px;outline:1.5px solid color-mix(in srgb,var(--bad) 70%,transparent);outline-offset:4px}
 @media (prefers-reduced-motion:no-preference){.f.miss{animation:shake .3s ease-in-out}@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}}
+/* Formular in klaren Blöcken */
+.fset{background:var(--bg);border-radius:18px;padding:14px;display:grid;gap:12px}
+.fset h3{font:600 1rem/1.2 var(--sans);letter-spacing:-.005em;margin:0;color:var(--ink)}
+.fset .f input,.fset .f select{background:var(--surface)}
+.fset .choice button{background:var(--surface)}
+.fset .choice button[aria-pressed="true"]{background:var(--accent)}
+.sheet{gap:12px}
+.sum{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:2px 12px;background:var(--surface);border-radius:14px;padding:12px 14px}
+.sum span{font-weight:600;color:var(--muted);font-size:.875rem}
+.sum b{font:600 1.25rem/1.1 var(--serif);font-variant-numeric:tabular-nums}
+.sum small{grid-column:1/-1;color:var(--muted);font-size:.8125rem}
+.kv.kv2{grid-template-columns:auto 1fr}
+.kv.kv2 .num{text-align:right}
+.kv.kv2 a{color:var(--accent);text-decoration:none;font-weight:600}
+.kv.kv2>:nth-child(-n+2){border-top:0;padding-top:0}
+.kv.kv2{column-gap:0}
+.kv.kv2>span:nth-child(odd){padding-right:14px;color:var(--muted)}
+.fset .choice button{min-width:48px}

@@ -489,6 +489,7 @@ function viewStudent(){
     <div class="tt"><div></div>${DAYS.map(d=>`<div class="h">${d}</div>`).join("")}${cells}</div>
   </details>
 
+  ${memberBlock(s)}
   ${docsBlock(s)}
 
   <section class="block"><div class="bh"><h2>Zugang</h2><button class="btn ghost small" data-act="editStudent">Bearbeiten</button></div>
@@ -497,6 +498,16 @@ function viewStudent(){
 }
 function delBtn(k,id){return ui.confirm===k+id?`<button class="btn warn small" data-act="del" data-k="${k}" data-v="${id}">Löschen</button>`:`<button class="btn ghost small" data-act="ask" data-k="${k}" data-v="${id}" aria-label="Löschen" style="padding:6px 10px;background:none;color:var(--muted)">×</button>`}
 
+function memberBlock(s){
+  const M=s.member||{},Gd=s.guardian||{},f=fee(M),end=termEnd(M);
+  if(!M.term&&!Gd.name&&!Gd.phone)return`<section class="block"><div class="bh"><h2>Mitgliedschaft</h2><button class="btn ghost small" data-act="editStudent">Eintragen</button></div></section>`;
+  return`<section class="block"><div class="bh"><h2>Mitgliedschaft</h2><button class="btn ghost small" data-act="editStudent">Ändern</button></div>
+    <div class="kv kv2"><span>Beitrag</span><span class="num"><b>${f!=null?f+" €":"–"}</b> / Monat</span>
+    <span>Laufzeit</span><span class="num">${M.term==="schuljahr"?"Schuljahr":M.term==="halbjahr"?"Schulhalbjahr":"–"}${M.start?" ab "+ymLabel(M.start):""}</span>
+    ${end?`<span>Bis</span><span class="num">${ymLabel(end)}${M.term==="schuljahr"?" · Juli frei":""}</span>`:""}
+    ${Gd.name||Gd.phone?`<span>Eltern</span><span class="num">${esc(Gd.name||"")}${Gd.phone?`<br><a href="tel:${esc(Gd.phone.replace(/\s+/g,""))}">${esc(Gd.phone)}</a>`:""}</span>`:""}</div>
+  </section>`;
+}
 function docsBlock(s){
   const L=DB.docs.filter(d=>d.sid===s.id).sort((a,b)=>b.date.localeCompare(a.date));
   const miss=!L.some(d=>d.kind==="Vertrag");
@@ -639,14 +650,30 @@ function renderSheet(){
   const s=cur(),d=sh.d||{};let body="";
   const head=(t)=>`<div class="bh"><h2>${t}</h2><button class="btn ghost small" data-act="close">Schließen</button></div>`;
   const err=sh.err?`<div class="err">${esc(sh.err)}</div>`:"";
-  if(sh.type==="student"){const lock=!lead(),m=k=>(sh.miss||[]).includes(k)?" miss":"";
-    body=head(sh.isNew?"Schüler hinzufügen":"Schüler bearbeiten")+`<div class="fg"><label class="f req${m("first")}">Vorname<input id="s-first" value="${esc(d.first)}" autocomplete="off"></label><label class="f req${m("last")}">Nachname<input id="s-last" value="${esc(d.last)}" autocomplete="off"></label>
-      <label class="f">Klasse<select id="s-kl">${opt(Array.from({length:10},(_,i)=>i+1),d.klasse)}</select></label>
-      <label class="f">Gruppe<select id="s-grp" ${lock?"disabled":""}>${opt([["jungs","Jungs"],["maedchen","Mädchen"]],d.group)}</select></label></div>
-      <div class="f req${m("schulform")}">Schulform${choice("sForm",SCHULFORMEN,d.schulform)}</div>
-      <div class="f req${m("come")}">Kommt am${choice("sCome",COME,d.come)}</div>
-      <label class="f">Schule<input id="s-schule" value="${esc(d.schule)}" autocomplete="off"></label>
-      <div class="f req${m("subjects")}">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div>${err}
+  if(sh.type==="student"){const lock=!lead(),m=k=>(sh.miss||[]).includes(k)?" miss":"",M=d.member||{},Gd=d.guardian||{},f=fee(M),end=termEnd(M);
+    body=head(sh.isNew?"Schüler hinzufügen":"Schüler bearbeiten")+`
+      <section class="fset"><h3>Kind</h3><div class="fg">
+        <label class="f req${m("first")}">Vorname<input id="s-first" value="${esc(d.first)}" autocomplete="off"></label>
+        <label class="f req${m("last")}">Nachname<input id="s-last" value="${esc(d.last)}" autocomplete="off"></label>
+        <label class="f">Geburtsdatum<input id="s-birth" type="date" value="${esc(d.birth||"")}"></label>
+        <label class="f">Gruppe<select id="s-grp" ${lock?"disabled":""}>${opt([["jungs","Jungs"],["maedchen","Mädchen"]],d.group)}</select></label></div></section>
+      <section class="fset"><h3>Schule</h3><div class="fg">
+        <label class="f">Klasse<select id="s-kl">${opt(Array.from({length:13},(_,i)=>i+1),d.klasse)}</select></label>
+        <label class="f">Name der Schule<input id="s-schule" value="${esc(d.schule)}" autocomplete="off"></label></div>
+        <div class="f req${m("schulform")}">Schulform${choice("sForm",SCHULFORMEN,d.schulform)}</div>
+        <div class="f req${m("subjects")}">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div></section>
+      <section class="fset"><h3>Mitgliedschaft</h3>
+        <div class="f req${m("come")}">Kommt am${choice("sCome",COME,d.come)}</div>
+        <div class="fg"><div class="f req${m("days")}">Pro Woche${choice("mDays",[[1,"1×"],[2,"2×"]],M.days)}</div>
+        <div class="f">Geschwister${choice("mSib",[[1,"1. Kind"],[2,"2. Kind"],[3,"3. Kind +"]],M.sib||1)}</div></div>
+        <div class="f req${m("term")}">Laufzeit${choice("mTerm",[["halbjahr","Schulhalbjahr"],["schuljahr","Schuljahr"]],M.term)}</div>
+        <label class="f">Beginn ab<input id="m-start" type="month" value="${esc(M.start||curYm())}"></label>
+        <div class="sum"><span>Beitrag</span><b>${f!=null?f+" € / Monat":"–"}</b>${end?`<small>bis ${ymLabel(end)}${M.term==="schuljahr"?" · Juli beitragsfrei":""} · danach monatlich kündbar</small>`:""}</div></section>
+      <section class="fset"><h3>Erziehungsberechtigte</h3><div class="fg">
+        <label class="f">Name<input id="g-name" value="${esc(Gd.name||"")}" autocomplete="off"></label>
+        <label class="f">Telefon<input id="g-phone" type="tel" value="${esc(Gd.phone||"")}" autocomplete="off"></label></div>
+        <label class="f">E-Mail<input id="g-mail" type="email" value="${esc(Gd.email||"")}" autocomplete="off"></label></section>
+      ${err}
       <div class="row" style="justify-content:space-between"><button class="btn" data-act="saveStudent">${sh.isNew?"Hinzufügen":"Speichern"}</button>${sh.isNew?"":ui.confirm==="student"?`<button class="btn warn" data-act="delStudent">Wirklich entfernen</button>`:`<button class="btn warn" data-act="ask" data-k="student" data-v="">Entfernen</button>`}</div>`}
   if(sh.type==="exam")body=head("Note eintragen")+`<div class="fg"><label class="f">Fach<select id="e-sub">${opt(s.subjects)}</select></label><label class="f">Art<select id="e-kind">${opt(["Klassenarbeit","Test","Mündlich","Referat"])}</select></label>
     <label class="f">Datum<input id="e-date" type="date" value="${today()}"></label><label class="f">Note<select id="e-grade">${opt(GRADES,"3")}</select></label></div>
@@ -695,11 +722,24 @@ function renderSheet(){
   if(sh.type==="invite")body=head("Einladen")+`<div class="infoline">${info("inv2","Danach legt die Person mit genau dieser E-Mail ein Konto an.")}</div>
     <div class="fg"><label class="f">Vorname<input id="iv-name" autocomplete="off"></label><label class="f">E-Mail<input id="iv-mail" type="email" autocomplete="off"></label></div>
     <div class="f">Gruppe${choice("ivGrp",[["jungs","Jungs"],["maedchen","Mädchen"],["leitung","Leitung"]],d.grp)}</div><button class="btn wide" data-act="saveInvite">Einladen</button>`;
+  const keep=L.querySelector(".sheet")?.scrollTop||0;
   L.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">${body}</div></div>`;
+  if(keep)L.querySelector(".sheet").scrollTop=keep;
 }
 function readTask(){const d=ui.sheet.d;d.title=$("#tk-title").value.trim();d.minK=+$("#tk-min").value;d.maxK=+$("#tk-max").value;d.items.forEach((it,i)=>{it.q=$("#ti-q"+i).value;if(it.type==="choice")it.optText=$("#ti-o"+i).value;else it.ansText=$("#ti-a"+i).value})}
 function unmiss(k,ok){const sh=ui.sheet;if(!sh?.miss)return;if(ok)sh.miss=sh.miss.filter(x=>x!==k);else if(!sh.miss.includes(k))sh.miss.push(k);if(!sh.miss.length)sh.err=""}
-function readStudent(){const d=ui.sheet.d;d.first=$("#s-first").value.trim();d.last=$("#s-last").value.trim();d.klasse=+$("#s-kl").value;if(!$("#s-grp").disabled)d.group=$("#s-grp").value;d.schule=$("#s-schule").value.trim()}
+function readStudent(){const d=ui.sheet.d;d.first=$("#s-first").value.trim();d.last=$("#s-last").value.trim();d.birth=$("#s-birth").value;d.klasse=+$("#s-kl").value;if(!$("#s-grp").disabled)d.group=$("#s-grp").value;d.schule=$("#s-schule").value.trim();
+  d.member=d.member||{};d.member.start=$("#m-start").value;d.guardian={name:$("#g-name").value.trim(),phone:$("#g-phone").value.trim(),email:$("#g-mail").value.trim()}}
+/* Mitgliedschaft laut Vertrag: 1× pro Woche 40 €, 2× 70 €; Geschwisterbonus 5 € (2. Kind), 10 € (ab 3. Kind) */
+const FEE={1:[40,35,30],2:[70,65,60]};
+const fee=m=>m&&m.days&&m.sib?FEE[m.days][Math.min(m.sib,3)-1]:null;
+const MONTHS=["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const ymLabel=ym=>{if(!ym)return"";const [y,m]=ym.split("-").map(Number);return MONTHS[m-1]+" "+y};
+/* Ende der Laufzeit: Schulhalbjahr bis Januar bzw. Juli, Schuljahr bis Juli (letzter Monat beitragsfrei) */
+function termEnd(m){if(!m?.start||!m.term)return null;const [y,mo]=m.start.split("-").map(Number);
+  if(m.term==="schuljahr")return(mo>=8?y+1:y)+"-07";
+  return mo>=8?(y+1)+"-01":mo===1?y+"-01":y+"-07"}
+const curYm=()=>today().slice(0,7);
 function readTerm(){const d=ui.sheet.d;d.date=$("#tm-date").value;d.time=$("#tm-time").value.trim();d.note=$("#tm-note").value.trim();if($("#tm-n"))d.n=+$("#tm-n").value;if($("#tm-alt"))d.alt=$("#tm-alt").checked}
 const toggle=(arr,v)=>{const i=arr.indexOf(v);i>=0?arr.splice(i,1):arr.push(v)};
 const blankItem=type=>type==="choice"?{id:uid(),type,q:"",optText:"*\n"}:{id:uid(),type,q:"",ansText:""};
@@ -761,17 +801,20 @@ document.addEventListener("click",e=>{
     case"filter":ui.filter=v;break;
     case"open":ui.sid=v;ui.allLogs=false;render(true);scrollTo(0,0);return;
     case"back":ui.sid=null;render(true);return;
-    case"newStudent":ui.sheet={type:"student",isNew:1,d:{first:"",last:"",klasse:5,group:lead()?(ui.filter==="maedchen"?"maedchen":"jungs"):me().group,schulform:"",schule:"",come:[],subjects:["Deutsch","Englisch","Mathe"]}};break;
+    case"newStudent":ui.sheet={type:"student",isNew:1,d:{first:"",last:"",klasse:5,group:lead()?(ui.filter==="maedchen"?"maedchen":"jungs"):me().group,schulform:"",schule:"",come:[],subjects:["Deutsch","Englisch","Mathe"],member:{sib:1,start:curYm()},guardian:{}}};break;
     case"editStudent":ui.sheet={type:"student",d:JSON.parse(JSON.stringify(s))};break;
     case"sForm":readStudent();sh.d.schulform=v;unmiss("schulform",1);break;
-    case"sCome":readStudent();toggle(sh.d.come,v);unmiss("come",sh.d.come.length);break;
+    case"sCome":readStudent();toggle(sh.d.come,v);unmiss("come",sh.d.come.length);if(sh.d.come.length&&!sh.d.member.days){sh.d.member.days=Math.min(2,sh.d.come.length);unmiss("days",1)}break;
+    case"mDays":readStudent();sh.d.member.days=+v;unmiss("days",1);break;
+    case"mSib":readStudent();sh.d.member.sib=+v;break;
+    case"mTerm":readStudent();sh.d.member.term=v;unmiss("term",1);break;
     case"sSub":readStudent();toggle(sh.d.subjects,v);unmiss("subjects",sh.d.subjects.length);break;
     case"saveStudent":{readStudent();const d=sh.d;
-      sh.miss=[!d.first&&"first",!d.last&&"last",!d.schulform&&"schulform",!(d.come||[]).length&&"come",!d.subjects.length&&"subjects"].filter(Boolean);
+      sh.miss=[!d.first&&"first",!d.last&&"last",!d.schulform&&"schulform",!d.subjects.length&&"subjects",!(d.come||[]).length&&"come",!d.member?.days&&"days",!d.member?.term&&"term"].filter(Boolean);
       if(sh.miss.length){sh.err="Bitte die rot markierten Felder ausfüllen.";render();navigator.vibrate?.([10,40,10]);document.querySelector("#layer .miss")?.scrollIntoView({block:"center",behavior:"smooth"});return}
       sh.err="";
       if(sh.isNew){const n={id:uid(),code:newCode(),created:today(),note:"",strengths:[],focus:[],exams:[],reports:[],plan:{},log:[],goals:[],...d};DB.students.push(n);ui.sid=n.id;toast(d.first+" hinzugefügt")}
-      else{Object.assign(s,{first:d.first,last:d.last,klasse:d.klasse,group:d.group,schule:d.schule,schulform:d.schulform,subjects:d.subjects,come:d.come});toast("Gespeichert")}
+      else{Object.assign(s,{first:d.first,last:d.last,birth:d.birth,klasse:d.klasse,group:d.group,schule:d.schule,schulform:d.schulform,subjects:d.subjects,come:d.come,member:d.member,guardian:d.guardian});toast("Gespeichert")}
       ui.sheet=null;save();break}
     case"delStudent":removeStudent(s);break;
     case"ask":ui.confirm=a.dataset.k+(v||"");break;
@@ -875,6 +918,7 @@ document.addEventListener("submit",e=>{
     sb.auth.updateUser({password:pw}).then(x=>{if(x.error){ui.authErr=authDe(x.error.message);render();return}toast("Passwort gespeichert");ui.authErr="";enterTeacher()});return}
 });
 let noteT;
+document.addEventListener("change",e=>{if(e.target.id==="m-start"&&ui.sheet?.type==="student"){const y=ui.sheet.el=document.querySelector("#layer .sheet")?.scrollTop;readStudent();render();const sh2=document.querySelector("#layer .sheet");if(sh2)sh2.scrollTop=y}});
 document.addEventListener("input",e=>{
   if((e.target.id==="s-first"||e.target.id==="s-last")&&ui.sheet?.miss){const k=e.target.id==="s-first"?"first":"last";if(e.target.value.trim()){ui.sheet.miss=ui.sheet.miss.filter(x=>x!==k);e.target.closest(".f").classList.remove("miss");if(!ui.sheet.miss.length){ui.sheet.err="";document.querySelector("#layer .err")?.remove()}}}
   if(e.target.id==="tin"&&ui.run)ui.run.inp=e.target.value;

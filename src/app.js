@@ -195,7 +195,7 @@ const editing=()=>{const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SE
 async function refresh(){if(!CLOUD||ui.mode!=="teacher"||!session||dirty||pushing||ui.sheet||editing())return;try{await pull();if(!dirty&&!editing()&&!ui.sheet)render()}catch(e){}}
 if(CLOUD){setInterval(refresh,60000);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh()})}
 async function enterTeacher(){
-  if(!CLOUD){DB=demoLoad();ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");render(true);return}
+  if(!CLOUD){DB=demoLoad();ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");lsSet("kt-schule-teacher","1");render(true);return}
   if(!session){ui.mode="auth";render(true);return}
   ui.mode="loading";render();
   try{
@@ -204,7 +204,7 @@ async function enterTeacher(){
     loaded=true;
     if(lead()){try{const r=await sb.rpc("team_code");DB.teamCode=r.data||""}catch(e){}}
     if(!DB.teachers.some(t=>t.id===DB.me))ui.mode="wait";
-    else{ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");
+    else{ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");lsSet("kt-schule-teacher","1");
       if(lead()&&!DB.sheets.length&&!DB.state.seeded){DB.sheets=seedSheets();chk(await sb.from("app_state").upsert({key:"seeded",value:true}));DB.state.seeded=true;save()}}
   }catch(e){console.error(e);ui.mode="auth";ui.authErr="Keine Verbindung zum Speicher. Prüfe dein Internet und versuch es noch einmal."}
   render(true);
@@ -214,7 +214,7 @@ const authDe=m=>/Invalid login/i.test(m)?"E-Mail oder Passwort stimmt nicht.":/n
 /* ---------- Schülerbereich: Daten ---------- */
 let STU=null,P=null,SH={sheets:[],attempts:[]},pTimer=null;
 const blankP=()=>({topics:{},days:{},wrongs:[],todayDone:null});
-function normP(p){p=p&&typeof p==="object"?p:{};return{topics:p.topics||{},days:p.days||{},wrongs:p.wrongs||[],todayDone:p.todayDone||null}}
+function normP(p){p=p&&typeof p==="object"?p:{};return{topics:p.topics||{},days:p.days||{},wrongs:p.wrongs||[],todayDone:p.todayDone||null,last:p.last||null}}
 async function stuLogin(code){
   code=code.trim().toUpperCase();
   if(!CLOUD){const D=demoLoad(),s=D.students.find(x=>x.code===code);if(!s)return false;
@@ -228,11 +228,14 @@ async function stuLogin(code){
 }
 function saveP(){
   if(!STU)return;
+  if(ui.watch)return; /* Lehrkraft schaut nur zu: nichts beim Kind speichern */
+  P.last=new Date().toISOString();
   if(!CLOUD){const D=demoLoad();D.progress[STU.id]=P;lsSet(DKEY,JSON.stringify(D));return}
   lsSet("kts-p-"+STU.id,JSON.stringify(P));
   clearTimeout(pTimer);pTimer=setTimeout(()=>sb.rpc("student_save_progress",{p_code:STU.code,p_progress:P}).then(()=>{}),1200);
 }
 function submitSheet(sheetId,score,total){
+  if(ui.watch)return;
   SH.attempts.unshift({sheetId,score,total,date:new Date().toISOString()});
   if(!CLOUD){const D=demoLoad();D.attempts.push({id:uid(),sid:STU.id,sheetId,score,total,date:new Date().toISOString()});lsSet(DKEY,JSON.stringify(D));return}
   sb.rpc("student_submit",{p_code:STU.code,p_sheet:sheetId,p_score:score,p_total:total}).then(r=>{if(r.error||r.data!==true)toast("Ergebnis konnte nicht gespeichert werden")});
@@ -278,9 +281,9 @@ function render(anim){try{renderInner(anim)}catch(err){console.error(err);$("#ap
    Die Leitung sieht alles (auf ihrem Gerät auch den Schülerbereich). Freigeben: TASKS_OPEN auf true setzen. */
 const TASKS_OPEN=false;
 const isPreview=()=>lsGet("kt-schule-lead")==="1";
-const tasksLocked=()=>!TASKS_OPEN&&!(ui.mode==="teacher"?lead():isPreview());
+const tasksLocked=()=>!TASKS_OPEN&&!(ui.mode==="teacher"||ui.watch?lead():isPreview());
 function viewSoon(who){
-  return`<div class="soon">${ibadge("bolt","--c2")}<h1>Bald da</h1><p class="muted">${who==="stu"?"Hier kannst du bald üben. Wir sagen dir Bescheid!":"Dieser Bereich wird gerade programmiert."}</p>${who==="stu"?`<button class="btn ghost small" data-act="toStart">Zurück</button>`:""}</div>`;
+  return`<div class="soon">${ibadge("bolt","--c2")}<h1>Bald da</h1><p class="muted">${who==="stu"?"Hier kannst du bald üben. Wir sagen dir Bescheid!":"Dieser Bereich wird gerade programmiert."}</p>${who==="stu"&&!ui.watch?`<button class="btn ghost small" data-act="toStart">Zurück</button>`:""}</div>`;
 }
 function renderInner(anim){
   const app=$("#app"),nav=$("#nav"),fb=$("#fbar");
@@ -295,13 +298,15 @@ function renderInner(anim){
   }else if(ui.mode==="teacher"){
     html=ui.tab==="students"?(ui.sid&&cur()?viewStudent():viewStudents()):ui.tab==="tasks"?(tasksLocked()?viewSoon("t"):viewTasks()):viewPlan();
     nav.hidden=false;nav.innerHTML=[["students","Schüler",ICON.people],["tasks","Aufgaben",ICON.sheet],["plan","Plan",ICON.cal]].map(([k,l,i])=>`<button data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':""}>${i}${l}</button>`).join("");
-  }else if(ui.mode==="code")html=viewCode();
+  }else if(ui.mode==="pick")html=viewPick();
+  else if(ui.mode==="code")html=viewCode();
   else if(ui.mode==="auth")html=viewAuth();
   else if(ui.mode==="newpw")html=viewNewPw();
   else if(ui.mode==="wait")html=viewWait();
   else if(ui.mode==="loading")html=`<div class="empty">Lädt …</div>`;
   else html=viewStart();
-  if((ui.mode==="teacher"&&!ui.sid)||(ui.mode==="student"&&STU&&!ui.run&&!ui.subj&&!tasksLocked()))html=APPBAR+html;
+  if(ui.watch&&ui.mode==="student"&&!ui.run)html=WATCHBAR()+html;
+  else if((ui.mode==="teacher"&&!ui.sid)||(ui.mode==="student"&&STU&&!ui.run&&!ui.subj&&!tasksLocked()))html=APPBAR+html;
   app.innerHTML=html;
   try{renderSheet()}catch(err){console.error(err);ui.sheet=null;$("#layer").innerHTML="";toast("Das Fenster ließ sich nicht öffnen.")}
   if(anim){app.classList.remove("vin");void app.offsetWidth;app.classList.add("vin")}
@@ -344,6 +349,51 @@ function viewWait(){return`<h1>Fast geschafft</h1><form id="fjoin" class="block"
   <label class="f"><span class="infoline">Teamcode ${info("tc2","Bekommst du von der Leitung.")}</span><input id="jn-code" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
   ${ui.authErr?`<div class="err">${esc(ui.authErr)}</div>`:""}<button class="btn wide">Beitreten</button></form>
   <div class="row"><button class="btn ghost small" data-act="logout">Abmelden</button></div>`}
+
+/* ---------- Lehrkräfte schauen in den Schülerbereich: Liste, dann Ansicht wie beim Kind (live) ---------- */
+const isTeacherDevice=()=>lsGet("kt-schule-teacher")==="1"&&(!CLOUD||!!session);
+async function ensureTeacherData(){
+  if(!CLOUD){if(!DB.teachers.length)DB=demoLoad();return true}
+  if(loaded&&DB.teachers.some(t=>t.id===DB.me))return true;
+  await pull();loaded=true;return DB.teachers.some(t=>t.id===DB.me);
+}
+async function openPick(){
+  ui.mode="loading";render();
+  try{if(!(await ensureTeacherData())){ui.mode="code";render(true);return}}catch(e){toast("Keine Verbindung");ui.mode="start";render();return}
+  ui.mode="pick";ui.watch=false;render(true);scrollTo(0,0);
+}
+const liveNow=p=>p?.last&&(Date.now()-new Date(p.last).getTime())<3*60000;
+function viewPick(){
+  let L=visible();if(lead()&&ui.pfilter&&ui.pfilter!=="alle")L=L.filter(s=>s.group===ui.pfilter);
+  if(ui.pq){const q=ui.pq.toLowerCase();L=L.filter(s=>(s.first+" "+s.last).toLowerCase().includes(q))}
+  L.sort((a,b)=>(liveNow(normP(DB.progress[b.id]))-liveNow(normP(DB.progress[a.id])))||a.first.localeCompare(b.first,"de"));
+  const live=L.filter(s=>liveNow(normP(DB.progress[s.id]))).length;
+  return`<button class="crumb" data-act="toStart">‹ Start</button><div class="head" style="margin-bottom:14px"><h1>Schüler</h1>${live?`<span class="livechip"><i></i>${live} übt gerade</span>`:""}</div>
+  <div class="row" style="margin:0 0 12px">${lead()?`<div class="seg" role="group" aria-label="Gruppe">${["alle","jungs","maedchen"].map(f=>`<button data-act="pfilter" data-v="${f}" aria-pressed="${(ui.pfilter||"alle")===f}">${f==="alle"?"Alle":GROUPS[f].label}</button>`).join("")}</div>`:""}
+    <input id="pq" type="search" placeholder="Suchen" value="${esc(ui.pq||"")}" aria-label="Suchen" class="search"></div>
+  ${L.length?`<div class="list">${L.map(s=>{const p=normP(DB.progress[s.id]),t=p.days[today()]||0,on=liveNow(p);
+    return`<button class="item" data-act="pickStu" data-v="${s.id}">${av(s.first+" "+s.last,s.group)}<span class="t">${esc(s.first)} ${esc(s.last)}</span><span class="r">${on?'<span class="livechip"><i></i>live</span>':t?`<span class="chip good">${t} heute</span>`:""}›</span><span class="d">Klasse ${s.klasse}${p.last&&!on?" · zuletzt "+ago(p.last):""}</span></button>`}).join("")}</div>`
+  :`<div class="block empty">${visible().length?"Niemand passt zur Suche.":"Noch keine Schüler."}</div>`}
+  <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost small" data-act="asCode">Mit Code anmelden</button></div>`;
+}
+function ago(iso){const m=Math.round((Date.now()-new Date(iso).getTime())/60000);if(m<60)return`vor ${m} Min.`;const h=Math.round(m/60);if(h<24)return`vor ${h} Std.`;const d=Math.round(h/24);return d===1?"gestern":`vor ${d} Tagen`}
+function watchStudent(id){
+  const s=DB.students.find(x=>x.id===id);if(!s)return;
+  STU={id:s.id,first:s.first,klasse:s.klasse,group:s.group,goals:s.goals||[],code:s.code};P=normP(JSON.parse(JSON.stringify(DB.progress[s.id]||{})));
+  SH={sheets:DB.sheets.filter(x=>sheetFits(x,s)),attempts:DB.attempts.filter(a=>a.sid===s.id).map(a=>({sheetId:a.sheetId,score:a.score,total:a.total,date:a.date}))};
+  ui.watch=true;ui.mode="student";ui.stab="home";ui.subj=null;ui.run=null;render(true);scrollTo(0,0);
+}
+const WATCHBAR=()=>`<div class="watchbar"><button class="crumb" data-act="stopWatch">‹ Liste</button><span class="livechip${liveNow(P)?"":" off"}"><i></i>${liveNow(P)?"übt gerade":"Ansicht"}</span></div>`;
+/* Live: alle 8 Sekunden den Lernstand neu holen, solange Liste oder Ansicht offen ist */
+async function pollLive(){
+  if(!CLOUD||document.visibilityState!=="visible"||!(ui.mode==="pick"||ui.watch)||ui.run)return;
+  try{const r=await sb.from("students").select("id,progress");if(r.error)return;
+    r.data.forEach(x=>DB.progress[x.id]=x.progress||{});
+    if(ui.watch&&STU){P=normP(JSON.parse(JSON.stringify(DB.progress[STU.id]||{})))}
+    if(!editing())render();
+  }catch(e){}
+}
+setInterval(pollLive,8000);
 
 /* ---------- Schülerbereich: Ansichten ---------- */
 const MARK=`<svg class="mark" viewBox="-220 -190 440 330" aria-hidden="true"><path d="M -195,-138 C -165,-102 -128,-92 -100,-100 C -72,-108 -40,-124 -14,-132 C -75,-95 -125,-20 -112,60 C -108,90 -100,112 -92,128 C -160,100 -212,30 -212,-40 C -212,-82 -205,-115 -195,-138 Z"/><path d="M 195,-138 C 165,-102 128,-92 100,-100 C 72,-108 40,-124 14,-132 C 75,-95 125,-20 112,60 C 108,90 100,112 92,128 C 160,100 212,30 212,-40 C 212,-82 205,-115 195,-138 Z"/><circle cx="-130" cy="-152" r="30"/><circle cx="130" cy="-152" r="30"/><path d="M -80,130 L -80,0 C -80,-58 -22,-72 0,-106 C 22,-72 80,-58 80,0 L 80,130 L 40,130 L 40,4 C 40,-32 14,-48 0,-64 C -14,-48 -40,-32 -40,4 L -40,130 Z"/></svg>`;
@@ -390,7 +440,7 @@ function viewStuStats(){
   <div class="stats"><div><b>${sk}</b><span>Tage am Stück</span></div><div><b>${tot}</b><span>Aufgaben gesamt</span></div><div><b>${acc==null?"–":acc+" %"}</b><span>richtig</span></div></div>
   <div class="sect"><span>Deine Themen</span></div>
   <div class="list">${myTopics().map(t=>{const m=mastery(P,t);return`<div class="item">${badge(TOPICS[t].s)}<span class="t">${TOPICS[t].n}</span><span class="r small">${m==null?"neu":Math.round(m*100)+" %"}</span><span class="bar"><i style="width:${Math.round((m||0)*100)}%"></i></span></div>`}).join("")}</div>
-  <div class="row" style="justify-content:center;margin-top:18px"><button class="btn ghost small" data-act="home">Abmelden</button></div>`;
+  ${ui.watch?"":`<div class="row" style="justify-content:center;margin-top:18px"><button class="btn ghost small" data-act="home">Abmelden</button></div>`}`;
 }
 
 /* ---------- Lernrunde: viele kurze Aufgaben, Fehler kommen in derselben Runde wieder ---------- */
@@ -456,7 +506,7 @@ function viewStudent(){
   <div class="eyebrow">Klasse ${s.klasse} · ${esc(s.schulform)}</div>
   <h1>${esc(s.first)} ${esc(s.last)}</h1>
 
-  <section class="block"><div class="bh"><h2>In der App</h2></div>
+  <section class="block"><div class="bh"><h2>In der App</h2><button class="btn ghost small" data-act="watchFromPage" data-v="${s.id}">Ansehen</button></div>
     <div class="mini"><div><b>${w}</b><span>Aufgaben, 7 Tage</span></div><div><b>${sk}</b><span>Tage am Stück</span></div><div><b>${Object.values(p.topics).reduce((a,o)=>a+o.n,0)}</b><span>Aufgaben gesamt</span></div></div>
     <div class="f" style="margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Förderziele ${info("goal","Kommen jeden Tag in die Übungsrunde des Kindes.")}</div>
     <div class="tags">${goals.map((t,i)=>`<span class="tag goal">${esc(TOPICS[t]?.n||t)}<button data-act="delGoal" data-v="${i}" aria-label="Förderziel entfernen">×</button></span>`).join("")}<button class="tag add" data-act="addGoal">+ Förderziel</button></div>
@@ -768,17 +818,22 @@ document.addEventListener("click",e=>{
   if(act==="open"||act==="editTerm"||act==="editTask"||act==="openDoc"||act==="ics")if(ui.sheet?.type==="menu")ui.sheet=null;
   switch(act){
     case"home":if(ui.mode==="student"){lsDel("kt-schule-code");STU=null;P=null}ui.mode="start";ui.run=null;ui.sheet=null;ui.sid=null;render(true);scrollTo(0,0);return;
-    case"asStudent":{const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
+    case"asStudent":{if(isTeacherDevice()){openPick();return}const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
       ui.mode="code";ui.codeErr="";render(true);$("#code")?.focus();return}
     case"asTeacher":ui.authErr="";ui.authMsg="";
       if(CLOUD&&loaded&&session&&DB.teachers.some(t=>t.id===DB.me)){ui.mode="teacher";render(true);refresh();return}
       enterTeacher();return;
-    case"toStart":ui.mode="start";ui.sheet=null;ui.run=null;ui.subj=null;render(true);scrollTo(0,0);return;
+    case"pickStu":watchStudent(v);return;
+    case"stopWatch":ui.watch=false;STU=null;P=null;ui.run=null;ui.subj=null;ui.mode="pick";render(true);scrollTo(0,0);return;
+    case"pfilter":ui.pfilter=v;break;
+    case"asCode":ui.mode="code";ui.codeErr="";render(true);$("#code")?.focus();return;
+    case"watchFromPage":watchStudent(v);return;
+    case"toStart":if(ui.watch){ui.watch=false;STU=null;P=null}ui.mode="start";ui.sheet=null;ui.run=null;ui.subj=null;render(true);scrollTo(0,0);return;
     case"authGrp":if($("#au-name")){ui.authName=$("#au-name").value;ui.authCode=$("#au-code").value;ui.authMail=$("#au-mail").value}ui.authGrp=v;break;
     case"authToggle":ui.authUp=!ui.authUp;ui.authErr="";ui.authMsg="";break;
     case"authReset":{const m=$("#au-mail").value.trim();if(!m){ui.authErr="Trag oben deine E-Mail ein und tippe dann noch einmal auf „Passwort vergessen“.";break}
       sb.auth.resetPasswordForEmail(m,{redirectTo:location.origin+location.pathname}).then(x=>{ui.authMail=m;ui.authErr=x.error?authDe(x.error.message):"";ui.authMsg=x.error?"":"Wir haben dir einen Link zum Zurücksetzen geschickt.";render()});return}
-    case"logout":if(!CLOUD){ui.mode="start";render(true);return}sb.auth.signOut().then(()=>{session=null;loaded=false;DB.students=[];ui.mode="start";render(true)});return;
+    case"logout":lsDel("kt-schule-teacher");lsDel("kt-schule-lead");if(!CLOUD){ui.mode="start";render(true);return}sb.auth.signOut().then(()=>{session=null;loaded=false;DB.students=[];ui.mode="start";render(true)});return;
     case"retryWait":enterTeacher();return;
     /* Schüler */
     case"stab":ui.stab=v;ui.subj=null;render(true);scrollTo(0,0);return;
@@ -920,6 +975,7 @@ document.addEventListener("submit",e=>{
 let noteT;
 document.addEventListener("change",e=>{if(e.target.id==="m-start"&&ui.sheet?.type==="student"){const y=ui.sheet.el=document.querySelector("#layer .sheet")?.scrollTop;readStudent();render();const sh2=document.querySelector("#layer .sheet");if(sh2)sh2.scrollTop=y}});
 document.addEventListener("input",e=>{
+  if(e.target.id==="pq"){ui.pq=e.target.value;const p=e.target.selectionStart;render();const q=$("#pq");q.focus();q.setSelectionRange(p,p);return}
   if((e.target.id==="s-first"||e.target.id==="s-last")&&ui.sheet?.miss){const k=e.target.id==="s-first"?"first":"last";if(e.target.value.trim()){ui.sheet.miss=ui.sheet.miss.filter(x=>x!==k);e.target.closest(".f").classList.remove("miss");if(!ui.sheet.miss.length){ui.sheet.err="";document.querySelector("#layer .err")?.remove()}}}
   if(e.target.id==="tin"&&ui.run)ui.run.inp=e.target.value;
   if(e.target.id==="note"){cur().note=e.target.value;clearTimeout(noteT);noteT=setTimeout(save,500)}
@@ -929,6 +985,8 @@ document.addEventListener("input",e=>{
 function goBack(){
   if(ui.sheet){ui.sheet=null;ui.confirm=null;render();return true}
   if(ui.run){ui.run=null;render(true);return true}
+  if(ui.watch&&!ui.subj&&ui.stab==="home"){$("[data-act=stopWatch]")?.click();return true}
+  if(ui.mode==="pick"){ui.mode="start";render(true);return true}
   if(ui.mode==="student"&&ui.subj){ui.subj=null;render(true);return true}
   if(ui.mode==="student"&&ui.stab!=="home"){ui.stab="home";render(true);return true}
   if(ui.mode==="teacher"&&ui.sid){ui.sid=null;render(true);return true}

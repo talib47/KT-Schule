@@ -247,3 +247,10 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .f.miss .choice button{border-color:color-mix(in srgb,var(--bad) 55%,transparent)}
 .choice{align-items:flex-start}
 .choice button{flex:none}
+/* Live-Ansicht für Lehrkräfte */
+.livechip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:.75rem;font-weight:600;background:color-mix(in srgb,var(--good) 13%,transparent);color:var(--good);white-space:nowrap}
+.livechip i{width:7px;height:7px;border-radius:50%;background:var(--good)}
+.livechip.off{background:var(--fill);color:var(--muted)}.livechip.off i{background:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.livechip:not(.off) i{animation:pulse 1.6s ease-in-out infinite}@keyframes pulse{50%{opacity:.35}}}
+.watchbar{display:flex;justify-content:space-between;align-items:center;margin:-6px 0 6px}
+.search{flex:1;min-width:8rem;min-height:36px;border:0;border-radius:12px;background:var(--fill);padding:6px 12px;font:inherit;color:var(--ink);outline:none}

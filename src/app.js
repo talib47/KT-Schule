@@ -664,8 +664,8 @@ function renderSheet(){
         <div class="f req${m("subjects")}">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div></section>
       <section class="fset"><h3>Mitgliedschaft</h3>
         <div class="f req${m("come")}">Kommt am${choice("sCome",COME,d.come)}</div>
-        <div class="fg"><div class="f req${m("days")}">Pro Woche${choice("mDays",[[1,"1×"],[2,"2×"]],M.days)}</div>
-        <div class="f">Geschwister${choice("mSib",[[1,"1. Kind"],[2,"2. Kind"],[3,"3. Kind +"]],M.sib||1)}</div></div>
+        <div class="f req${m("days")}">Pro Woche${choice("mDays",[[1,"1× pro Woche"],[2,"2× pro Woche"]],M.days)}</div>
+        <div class="f">Geschwister${choice("mSib",[[1,"1. Kind"],[2,"2. Kind"],[3,"3. Kind +"]],M.sib||1)}</div>
         <div class="f req${m("term")}">Laufzeit${choice("mTerm",[["halbjahr","Schulhalbjahr"],["schuljahr","Schuljahr"]],M.term)}</div>
         <label class="f">Beginn ab<input id="m-start" type="month" value="${esc(M.start||curYm())}"></label>
         <div class="sum"><span>Beitrag</span><b>${f!=null?f+" € / Monat":"–"}</b>${end?`<small>bis ${ymLabel(end)}${M.term==="schuljahr"?" · Juli beitragsfrei":""} · danach monatlich kündbar</small>`:""}</div></section>

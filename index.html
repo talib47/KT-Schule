@@ -393,6 +393,31 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .kv.kv2{column-gap:0}
 .kv.kv2>span:nth-child(odd){padding-right:14px;color:var(--muted)}
 .fset .choice button{min-width:48px}
+/* ---------- Leiser und gleichmäßig: ein Raster, gleiche Höhen, ruhige Auswahl ---------- */
+.fg{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:340px){.fg{grid-template-columns:1fr}}
+.f{gap:6px;font-size:.8125rem;font-weight:500}
+.f input,.f select,.fset .f input,.fset .f select{min-width:0;width:100%;height:44px;min-height:44px;padding:0 12px;border-radius:12px;font:400 1rem/44px var(--sans);
+  -webkit-appearance:none;appearance:none;box-sizing:border-box}
+.f input[type=date],.f input[type=month]{display:block;line-height:44px;text-align:left}
+.f input[type=date]::-webkit-date-and-time-value,.f input[type=month]::-webkit-date-and-time-value{text-align:left;margin:0}
+.f select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238E8E93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:11px 8px;padding-right:32px}
+.fset{gap:14px;padding:16px}
+.fset h3{font:600 .8125rem/1 var(--sans);color:var(--muted);letter-spacing:.01em}
+.choice{gap:6px}
+.choice button,.fset .choice button{min-height:36px;min-width:0;padding:0 14px;border-radius:10px;font:500 .875rem/36px var(--sans);
+  background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.choice button[aria-pressed="true"],.fset .choice button[aria-pressed="true"]{background:var(--tint);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);font-weight:600}
+.choice button:disabled{opacity:.5}
+.sheet .choice button{background:var(--surface)}
+.sheet>.choice button,.sheet>.f .choice button{background:var(--fill);border-color:transparent}
+.sheet>.f .choice button[aria-pressed="true"]{background:var(--tint);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.sum{padding:12px 14px;border:1px solid var(--line)}
+.sum b{font-size:1.125rem}
+.f.miss .choice{outline:none}
+.f.miss .choice button{border-color:color-mix(in srgb,var(--bad) 55%,transparent)}
+.choice{align-items:flex-start}
+.choice button{flex:none}
 </style>
 </head>
 <body>
@@ -1068,8 +1093,8 @@ function renderSheet(){
         <div class="f req${m("subjects")}">Fächer${choice("sSub",SUBJECTS,d.subjects)}</div></section>
       <section class="fset"><h3>Mitgliedschaft</h3>
         <div class="f req${m("come")}">Kommt am${choice("sCome",COME,d.come)}</div>
-        <div class="fg"><div class="f req${m("days")}">Pro Woche${choice("mDays",[[1,"1×"],[2,"2×"]],M.days)}</div>
-        <div class="f">Geschwister${choice("mSib",[[1,"1. Kind"],[2,"2. Kind"],[3,"3. Kind +"]],M.sib||1)}</div></div>
+        <div class="f req${m("days")}">Pro Woche${choice("mDays",[[1,"1× pro Woche"],[2,"2× pro Woche"]],M.days)}</div>
+        <div class="f">Geschwister${choice("mSib",[[1,"1. Kind"],[2,"2. Kind"],[3,"3. Kind +"]],M.sib||1)}</div>
         <div class="f req${m("term")}">Laufzeit${choice("mTerm",[["halbjahr","Schulhalbjahr"],["schuljahr","Schuljahr"]],M.term)}</div>
         <label class="f">Beginn ab<input id="m-start" type="month" value="${esc(M.start||curYm())}"></label>
         <div class="sum"><span>Beitrag</span><b>${f!=null?f+" € / Monat":"–"}</b>${end?`<small>bis ${ymLabel(end)}${M.term==="schuljahr"?" · Juli beitragsfrei":""} · danach monatlich kündbar</small>`:""}</div></section>
@@ -1367,7 +1392,7 @@ document.addEventListener("keydown",e=>{
 });
 /* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
    Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
-const VERSION="a228684482";
+const VERSION="c75e882306";
 async function checkUpdate(){
   if(!CLOUD)return;
   try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();

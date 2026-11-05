@@ -124,15 +124,17 @@ function demoSeed(){
   const E=(subject,kind,d,grade,topic)=>({id:uid(),subject,kind,date:addDays(today(),-d),grade,topic:topic||""});
   const base={schule:"",note:"",strengths:[],focus:[],reports:[],plan:{},log:[],created:today()};
   const st=[
-    {...base,id:uid(),code:"YUSUF7",first:"Yusuf",last:"B.",group:"jungs",klasse:7,schulform:"Gesamtschule",come:["Mi"],subjects:["Deutsch","Englisch","Mathe"],goals:["m-kuerzen","e-past"],strengths:["Kopfrechnen"],focus:["Textaufgaben"],note:"Braucht beim Start eine klare Aufgabe, dann arbeitet er konzentriert.",
+    {...base,id:uid(),code:"YUSUF7",first:"Yusuf",last:"B.",group:"jungs",klasse:7,schulform:"Gesamtschule",come:["Mi"],member:{days:1,sib:1,term:"schuljahr",start:addDays(today(),-35).slice(0,7)},pay:{[addDays(today(),-35).slice(0,7)]:true},guardian:{name:"Familie B."},subjects:["Deutsch","Englisch","Mathe"],goals:["m-kuerzen","e-past"],strengths:["Kopfrechnen"],focus:["Textaufgaben"],note:"Braucht beim Start eine klare Aufgabe, dann arbeitet er konzentriert.",
       exams:[E("Mathe","Klassenarbeit",60,"4"),E("Mathe","Test",20,"3-","Brüche"),E("Deutsch","Klassenarbeit",30,"3+"),E("Englisch","Klassenarbeit",25,"2-")],
       reports:[{id:uid(),label:"Halbjahr 6.2",date:addDays(today(),-130),grades:{Deutsch:"3",Englisch:"2",Mathe:"4"}}],
       plan:{"0-0":"Mathe","0-1":"Mathe","1-0":"Englisch","2-0":"Deutsch","2-1":"GL","3-0":"Mathe","4-0":"Sport"},
       log:[{id:uid(),date:addDays(today(),0),kind:"Lernzeit-Aufgaben",subject:"Mathe",status:"erledigt",note:"Brüche erweitern, Buch S. 54"}]},
-    {...base,id:uid(),code:"EMRE45",first:"Emre",last:"K.",group:"jungs",klasse:5,schulform:"Realschule",come:["Mi"],subjects:["Deutsch","Englisch","Mathe"],goals:["d-dass"],exams:[E("Deutsch","Test",12,"4+","Diktat"),E("Mathe","Klassenarbeit",30,"2")],
+    {...base,id:uid(),code:"EMRE45",first:"Emre",last:"K.",group:"jungs",klasse:5,schulform:"Realschule",come:["Mi"],member:{days:1,sib:2,term:"halbjahr",start:today().slice(0,7)},subjects:["Deutsch","Englisch","Mathe"],goals:["d-dass"],exams:[E("Deutsch","Test",12,"4+","Diktat"),E("Mathe","Klassenarbeit",30,"2")],
       log:[{id:uid(),date:addDays(today(),0),kind:"Hausaufgaben",subject:"Deutsch",status:"teilweise",note:"Lernwörter"}]},
   ];
   const wed=nextWd(3),entries=[];
+  entries.push({id:uid(),date:addDays(wed,-7),grp:"jungs",time:"16:30–19:30",who:[t[0].id],note:"",att:{}});
+  entries[0].att={[st[0].id]:"da",[st[1].id]:"ent"};
   for(let i=0;i<6;i++){entries.push({id:uid(),date:addDays(wed,7*i),grp:"jungs",time:"16:30–19:30",who:[t[i%2===0?0:1].id],note:""})}
   const prog={};prog[st[0].id]={topics:{"m-kuerzen":{h:[1,0,1,1,0,1],n:6}},days:{[addDays(today(),-1)]:12,[addDays(today(),-2)]:8},wrongs:[],todayDone:null};
   return{me:t[0].id,teachers:t,students:st,sheets:seedSheets(),attempts:[],duty:{entries},invites:[],progress:prog,state:{sides:{[t[0].id]:"jungs"}},docs:[{id:uid(),sid:st[0].id,kind:"Vertrag",name:"Mitgliedschaft Yusuf.pdf",mime:"application/pdf",size:182000,date:addDays(today(),-20),data:null}]};
@@ -165,7 +167,14 @@ async function pull(){
   SNAP.students=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));
   SNAP.sheets=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));
   SNAP.duty=JSON.stringify(DB.duty);
+  cacheTeacher();
 }
+/* Offline: letzter Stand des Lehrerbereichs im Gerät (wird beim Abmelden gelöscht) */
+const TKEY="kts-cache";
+function cacheTeacher(){if(!DB.me)return;const {me,teachers,students,progress,sheets,attempts,state,duty,docs}=DB;lsSet(TKEY,JSON.stringify({me,teachers,students,progress,sheets,attempts,state,duty,docs,at:new Date().toISOString()}))}
+function loadTeacherCache(){const r=lsGet(TKEY);if(!r)return false;try{const c=JSON.parse(r);if(!session||c.me!==session.user.id)return false;Object.assign(DB,c);DB.invites=[];
+  SNAP.students=Object.fromEntries(DB.students.map(x=>[x.id,JSON.stringify(x)]));SNAP.sheets=Object.fromEntries(DB.sheets.map(x=>[x.id,JSON.stringify(x)]));SNAP.duty=JSON.stringify(DB.duty);
+  for(const k of ["sides","subjects"])SNAP["st_"+k]=JSON.stringify(DB.state[k]||null);return true}catch(e){return false}}
 function save(){
   if(!CLOUD){lsSet(DKEY,JSON.stringify(DB));return}
   dirty=true;clearTimeout(pushTimer);pushTimer=setTimeout(push,500);setSync("busy");
@@ -187,7 +196,7 @@ async function push(){
     for(const k of ["sides","subjects"]){const j=JSON.stringify(DB.state[k]||null);if(j!==SNAP["st_"+k]){chk(await sb.from("app_state").upsert({key:k,value:DB.state[k]||(k==="sides"?{}:[]),updated_at:new Date().toISOString()}));SNAP["st_"+k]=j}}
     const dj=JSON.stringify(DB.duty);
     if(dj!==SNAP.duty){chk(await sb.from("app_state").upsert({key:"duty",value:DB.duty,updated_at:new Date().toISOString()}));SNAP.duty=dj}
-    if(!again)dirty=false;setSync("ok");
+    if(!again)dirty=false;setSync("ok");cacheTeacher();
   }catch(e){console.error(e);setSync("err");setTimeout(()=>{if(dirty&&!pushTimer)push()},8000)}
   pushing=false;if(again){again=false;push()}
 }
@@ -206,9 +215,14 @@ async function enterTeacher(){
     if(!DB.teachers.some(t=>t.id===DB.me))ui.mode="wait";
     else{ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");lsSet("kt-schule-teacher","1");
       if(lead()&&!DB.sheets.length&&!DB.state.seeded){DB.sheets=seedSheets();chk(await sb.from("app_state").upsert({key:"seeded",value:true}));DB.state.seeded=true;save()}}
-  }catch(e){console.error(e);ui.mode="auth";ui.authErr="Keine Verbindung zum Speicher. Prüfe dein Internet und versuch es noch einmal."}
+  }catch(e){console.error(e);
+    if(loadTeacherCache()){loaded=true;ui.mode="teacher";ui.tab="students";offline=true;toast("Offline: letzter gespeicherter Stand")}
+    else{ui.mode="auth";ui.authErr="Keine Verbindung zum Speicher. Prüfe dein Internet und versuch es noch einmal."}}
   render(true);
 }
+let offline=false;
+window.addEventListener("online",()=>{offline=false;if(CLOUD&&session&&dirty)push();if(CLOUD&&STU&&!ui.watch)flushStudent();if(ui.mode==="teacher")refresh()});
+window.addEventListener("offline",()=>{offline=true;if(ui.mode==="teacher"||ui.mode==="student")toast("Offline – Änderungen werden später gespeichert")});
 const authDe=m=>/Invalid login/i.test(m)?"E-Mail oder Passwort stimmt nicht.":/not confirmed/i.test(m)?"Bitte bestätige zuerst deine E-Mail (Link im Postfach).":/already registered/i.test(m)?"Für diese E-Mail gibt es schon ein Konto. Melde dich an.":/at least|Password should/i.test(m)?"Das Passwort braucht mindestens 8 Zeichen.":/rate limit/i.test(m)?"Zu viele Versuche. Warte ein paar Minuten.":/valid email|invalid format/i.test(m)?"Bitte eine gültige E-Mail-Adresse eintragen.":m;
 
 /* ---------- Schülerbereich: Daten ---------- */
@@ -224,7 +238,14 @@ async function stuLogin(code){
     STU={id:d.id,first:d.first,klasse:d.klasse,group:d.grp,goals:d.goals||[],code};
     const local=lsGet("kts-p-"+d.id);P=normP(d.progress&&Object.keys(d.progress).length?d.progress:local?JSON.parse(local):null);
     const s2=await sb.rpc("student_sheets",{p_code:code});SH=s2.error||!s2.data?{sheets:[],attempts:[]}:{sheets:s2.data.sheets||[],attempts:s2.data.attempts||[]}}
-  lsSet("kt-schule-code",code);return true;
+  lsSet("kt-schule-code",code);if(CLOUD)lsSet("kts-stu",JSON.stringify({code,STU,SH}));return true;
+}
+function stuFromCache(code){try{const c=JSON.parse(lsGet("kts-stu")||"null");if(!c||c.code!==code)return false;STU=c.STU;SH=c.SH;const l=lsGet("kts-p-"+STU.id);P=normP(l?JSON.parse(l):null);return true}catch(e){return false}}
+function flushStudent(){
+  if(!STU)return;
+  if(lsGet("kts-pending")==="1")sb.rpc("student_save_progress",{p_code:STU.code,p_progress:P}).then(r=>{if(!r.error)lsDel("kts-pending")});
+  let q=[];try{q=JSON.parse(lsGet("kts-subq")||"[]")}catch(e){}
+  if(q.length){lsDel("kts-subq");q.forEach(x=>sb.rpc("student_submit",x).then(r=>{if(r.error){const qq=JSON.parse(lsGet("kts-subq")||"[]");qq.push(x);lsSet("kts-subq",JSON.stringify(qq))}}))}
 }
 function saveP(){
   if(!STU)return;
@@ -232,13 +253,17 @@ function saveP(){
   P.last=new Date().toISOString();
   if(!CLOUD){const D=demoLoad();D.progress[STU.id]=P;lsSet(DKEY,JSON.stringify(D));return}
   lsSet("kts-p-"+STU.id,JSON.stringify(P));
-  clearTimeout(pTimer);pTimer=setTimeout(()=>sb.rpc("student_save_progress",{p_code:STU.code,p_progress:P}).then(()=>{}),1200);
+  lsSet("kts-pending","1");
+  clearTimeout(pTimer);pTimer=setTimeout(()=>sb.rpc("student_save_progress",{p_code:STU.code,p_progress:P}).then(r=>{if(!r.error)lsDel("kts-pending")}).catch(()=>{}),1200);
 }
 function submitSheet(sheetId,score,total){
   if(ui.watch)return;
   SH.attempts.unshift({sheetId,score,total,date:new Date().toISOString()});
   if(!CLOUD){const D=demoLoad();D.attempts.push({id:uid(),sid:STU.id,sheetId,score,total,date:new Date().toISOString()});lsSet(DKEY,JSON.stringify(D));return}
-  sb.rpc("student_submit",{p_code:STU.code,p_sheet:sheetId,p_score:score,p_total:total}).then(r=>{if(r.error||r.data!==true)toast("Ergebnis konnte nicht gespeichert werden")});
+  const x={p_code:STU.code,p_sheet:sheetId,p_score:score,p_total:total};
+  const queue=()=>{let q=[];try{q=JSON.parse(lsGet("kts-subq")||"[]")}catch(e){}q.push(x);lsSet("kts-subq",JSON.stringify(q))};
+  if(!navigator.onLine){queue();return}
+  sb.rpc("student_submit",x).then(r=>{if(r.error)queue();else if(r.data!==true)toast("Ergebnis konnte nicht gespeichert werden")}).catch(queue);
 }
 const mastery=(p,t)=>{const h=p.topics[t]?.h||[];return h.length?h.reduce((a,b)=>a+b,0)/h.length:null};
 function record(t,ok){const o=P.topics[t]=P.topics[t]||{h:[],n:0};o.h.push(ok?1:0);if(o.h.length>20)o.h.shift();o.n++;P.days[today()]=(P.days[today()]||0)+1}
@@ -299,6 +324,7 @@ function renderInner(anim){
     html=ui.tab==="students"?(ui.sid&&cur()?viewStudent():viewStudents()):ui.tab==="tasks"?(tasksLocked()?viewSoon("t"):viewTasks()):viewPlan();
     nav.hidden=false;nav.innerHTML=[["students","Schüler",ICON.people],["tasks","Aufgaben",ICON.sheet],["plan","Plan",ICON.cal]].map(([k,l,i])=>`<button data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':""}>${i}${l}</button>`).join("");
   }else if(ui.mode==="pick")html=viewPick();
+  else if(ui.mode==="legal")html=viewLegal();
   else if(ui.mode==="code")html=viewCode();
   else if(ui.mode==="auth")html=viewAuth();
   else if(ui.mode==="newpw")html=viewNewPw();
@@ -306,7 +332,7 @@ function renderInner(anim){
   else if(ui.mode==="loading")html=`<div class="empty">Lädt …</div>`;
   else html=viewStart();
   if(ui.watch&&ui.mode==="student"&&!ui.run)html=WATCHBAR()+html;
-  else if((ui.mode==="teacher"&&!ui.sid)||(ui.mode==="student"&&STU&&!ui.run&&!ui.subj&&!tasksLocked()))html=APPBAR+html;
+  else if((ui.mode==="teacher"&&!ui.sid&&!ui.view)||(ui.mode==="student"&&STU&&!ui.run&&!ui.subj&&!tasksLocked()))html=APPBAR+html;
   app.innerHTML=html;
   try{renderSheet()}catch(err){console.error(err);ui.sheet=null;$("#layer").innerHTML="";toast("Das Fenster ließ sich nicht öffnen.")}
   if(anim){app.classList.remove("vin");void app.offsetWidth;app.classList.add("vin")}
@@ -314,11 +340,30 @@ function renderInner(anim){
 const LOGO=`<img class="logo" src="__ICON__" alt="Kocatepe Gençlik Ruhrort" width="88" height="88">`;
 /* Kleine Leiste oben: Logo führt zurück zur Startseite (Schüler / Lehrkräfte), ohne abzumelden */
 const APPBAR=`<div class="appbar"><button class="homebtn" data-act="toStart" aria-label="Zur Startseite"><img src="__ICON__" alt="" width="30" height="30"><span>KT Schule</span></button></div>`;
+const VEREIN="DITIB - Türk. Islam. Gem. zu Dbg.-Ruhrort e.V.",ADR="Homberger Straße 4a, 47119 Duisburg",MAIL="1168.vorstand@ditib-nrw-d.de";
+function viewLegal(){
+  if(ui.legal==="imprint")return`<button class="crumb" data-act="toStart">‹ Start</button><h1>Impressum</h1><div class="block legaltext">
+    <p><b>${VEREIN}</b><br>${ADR}</p><p>Vertreten durch den Vorstand.</p><p>E-Mail: ${MAIL}</p>
+    <p>Die App „KT Schule“ wird von der Jugend des Vereins (Kocatepe Gençlik Ruhrort) für Nachhilfe und Lernzeit betrieben.</p></div>`;
+  return`<button class="crumb" data-act="toStart">‹ Start</button><h1>Datenschutz</h1><div class="block legaltext">
+    <h3>Wer ist verantwortlich?</h3><p>${VEREIN}, ${ADR}. E-Mail: ${MAIL}</p>
+    <h3>Welche Daten speichern wir?</h3>
+    <p><b>Schülerinnen und Schüler:</b> Name, Geburtsdatum, Klasse, Schule und Schulform, Noten und Zeugnisse, Einträge zu Lernzeit und Hausaufgaben, Anwesenheit, Stärken und Förderziele, hochgeladene Unterlagen (z. B. Vertrag) und der Lernstand beim Üben.</p>
+    <p><b>Erziehungsberechtigte:</b> Name, Telefon, E-Mail und ob der Beitrag bezahlt ist.</p>
+    <p><b>Lehrkräfte:</b> Name, E-Mail-Adresse und Einsatztermine.</p>
+    <h3>Wofür?</h3><p>Nur für die Nachhilfe und Lernzeit im Jugendzentrum und für die Mitgliederverwaltung. Keine Werbung, keine Weitergabe an Dritte, keine Analyse- oder Werbedienste.</p>
+    <h3>Wer sieht die Daten?</h3><p>Nur angemeldete Lehrkräfte: Lehrer sehen die Jungs-Gruppe, Lehrerinnen die Mädchen-Gruppe, die Leitung alle. Schülerinnen und Schüler sehen mit ihrem Code nur ihre eigenen Übungen und ihren Lernstand, keine Noten oder Notizen.</p>
+    <h3>Wo werden sie gespeichert?</h3><p>In einer Datenbank bei Supabase (Server in London, Großbritannien; für Großbritannien gilt ein Angemessenheitsbeschluss der EU). Die App-Dateien liefert GitHub Pages aus, eine Programmbibliothek kommt von jsDelivr. Dabei wird technisch bedingt die IP-Adresse verarbeitet. Auf dem Gerät speichert die App die Anmeldung und einen Zwischenstand, damit sie auch ohne Internet funktioniert.</p>
+    <h3>Wie lange?</h3><p>Solange die Mitgliedschaft besteht. Danach werden die Daten gelöscht, soweit keine gesetzliche Aufbewahrungspflicht besteht.</p>
+    <h3>Grundlage</h3><p>Die Mitgliedschaft (Art. 6 Abs. 1 lit. b DSGVO) und die Einwilligung der Erziehungsberechtigten bei der Anmeldung (Art. 6 Abs. 1 lit. a DSGVO).</p>
+    <h3>Ihre Rechte</h3><p>Sie können jederzeit Auskunft, Berichtigung oder Löschung verlangen, der Verarbeitung widersprechen und eine Einwilligung widerrufen. Schreiben Sie dazu an ${MAIL}. Beschweren können Sie sich bei der Landesbeauftragten für Datenschutz und Informationsfreiheit NRW.</p></div>`;
+}
 function viewStart(){
   return`<div class="startwrap">${LOGO}<h1>KT Schule</h1>
     <button class="door kid" data-act="asStudent">${MARK}<b>Schüler</b><span class="go">›</span></button>
     <button class="door" data-act="asTeacher"><b>Lehrkräfte</b><span class="go">›</span></button>
     ${CLOUD?"":`<div class="infoline">${info("demo","Vorschau mit Beispieldaten. Schüler-Codes: YUSUF7, EMRE45")}</div>`}
+    <div class="legal"><button data-act="legal" data-v="privacy">Datenschutz</button><span>·</span><button data-act="legal" data-v="imprint">Impressum</button></div>
   </div>`;
 }
 function viewCode(){
@@ -478,11 +523,21 @@ function next(){const r=ui.run;r.i++;r.inp="";r.state=null;r.chosen=null;render(
 
 /* ---------- Lehrkräfte: Schüler ---------- */
 function stuStats(s){const p=normP(DB.progress[s.id]);const w=week(p).reduce((a,b)=>a+b.v,0);return{p,w,sk:streak(p)}}
+function viewFees(){
+  const ym=curYm(),L=visible().filter(s=>(s.member||{}).days).sort((a,b)=>a.first.localeCompare(b.first,"de"));
+  const open=L.reduce((sum,s)=>sum+feeOpen(s).length*fee(s.member),0),exp=L.reduce((sum,s)=>sum+(feeState(s,ym)&&feeState(s,ym)!=="frei"?fee(s.member):0),0);
+  return`<button class="crumb" data-act="view" data-v="">‹ Schüler</button><h1>Beiträge</h1>
+  <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:12px"><div><b>${exp} €</b><span>${MONTHS[+ym.slice(5)-1]}</span></div><div><b style="color:${open?"var(--bad)":"inherit"}">${open} €</b><span>insgesamt offen</span></div></div>
+  ${L.length?`<div class="list">${L.map(s=>{const st=feeState(s,ym),o=feeOpen(s);return`<div class="item">${av(s.first+" "+s.last,s.group)}<span class="t">${esc(s.first)} ${esc(s.last)}</span>
+    <span class="r">${st==="frei"?'<span class="chip">frei</span>':`<button class="mo m-${st}" data-act="payRow" data-k="${s.id}" data-v="${ym}">${MONTHS[+ym.slice(5)-1].slice(0,3)}<i>${st==="bezahlt"?"✓":"offen"}</i></button>`}</span>
+    <span class="d">${fee(s.member)} € / Monat${o.length>1||(o.length===1&&o[0]!==ym)?` · ${o.length*fee(s.member)} € offen`:""}</span></div>`}).join("")}</div>`:`<div class="block empty">Bei keinem Schüler ist eine Mitgliedschaft eingetragen.</div>`}`;
+}
 function viewStudents(){
+  if(ui.view==="fees")return viewFees();
   let L=visible();if(lead()&&ui.filter!=="alle")L=L.filter(s=>s.group===ui.filter);
   if(ui.q){const q=ui.q.toLowerCase();L=L.filter(s=>(s.first+" "+s.last).toLowerCase().includes(q))}
   L.sort((a,b)=>a.first.localeCompare(b.first,"de"));
-  return`${hintsBlock()}<div class="headwrap"><div class="head"><h1>Schüler</h1><button class="btn small" data-act="newStudent">Hinzufügen</button></div></div>
+  return`${hintsBlock()}<div class="headwrap"><div class="head"><h1>Schüler</h1><div class="row"><button class="btn ghost small" data-act="view" data-v="fees">Beiträge</button><button class="btn small" data-act="newStudent">Hinzufügen</button></div></div></div>
   ${lead()||visible().length>8?`<div class="row" style="margin:0 0 12px">${lead()?`<div class="seg" role="group" aria-label="Gruppe">${["alle","jungs","maedchen"].map(f=>`<button data-act="filter" data-v="${f}" aria-pressed="${ui.filter===f}">${f==="alle"?"Alle":GROUPS[f].label}</button>`).join("")}</div>`:""}${visible().length>8?`<input id="q" type="search" placeholder="Suchen" value="${esc(ui.q)}" aria-label="Suchen" style="flex:1;min-width:8rem;min-height:36px;border:0;border-radius:12px;background:var(--fill);padding:6px 12px">`:""}</div>`:""}
   ${L.length?`<div class="list">${L.map(s=>{const {w}=stuStats(s);return`<button class="item" data-act="open" data-v="${s.id}" data-hold="student:${s.id}">${av(s.first+" "+s.last,s.group)}<span class="t">${esc(s.first)} ${esc(s.last)}</span><span class="r">${!DB.docs.some(d=>d.sid===s.id&&d.kind==="Vertrag")?'<span class="dot warnd" title="Vertrag fehlt"></span>':""}›</span><span class="d">Klasse ${s.klasse}</span></button>`}).join("")}</div>`
   :`<div class="block empty">${visible().length?"Niemand passt zur Suche.":"Noch keine Schüler. Tippe auf „Hinzufügen“."}</div>`}`;
@@ -539,6 +594,7 @@ function viewStudent(){
     <div class="tt"><div></div>${DAYS.map(d=>`<div class="h">${d}</div>`).join("")}${cells}</div>
   </details>
 
+  ${attSummary(s)}
   ${memberBlock(s)}
   ${docsBlock(s)}
 
@@ -548,6 +604,15 @@ function viewStudent(){
 }
 function delBtn(k,id){return ui.confirm===k+id?`<button class="btn warn small" data-act="del" data-k="${k}" data-v="${id}">Löschen</button>`:`<button class="btn ghost small" data-act="ask" data-k="${k}" data-v="${id}" aria-label="Löschen" style="padding:6px 10px;background:none;color:var(--muted)">×</button>`}
 
+/* Beiträge je Monat: s.pay = {"2026-11": true}. Fällig ab Beginn bis heute; beim Schuljahr ist der letzte Monat frei */
+function feeMonths(s){const M=s.member||{};if(!M.start||!M.days)return[];const out=[];let [y,m]=M.start.split("-").map(Number);const [cy,cm]=curYm().split("-").map(Number);
+  while(y<cy||(y===cy&&m<=cm)){out.push(`${y}-${String(m).padStart(2,"0")}`);m++;if(m>12){m=1;y++}if(out.length>36)break}return out}
+function feeState(s,ym){const M=s.member||{};if(!M.start||!M.days||ym<M.start)return null;if(M.term==="schuljahr"&&termEnd(M)===ym)return"frei";return(s.pay||{})[ym]?"bezahlt":"offen"}
+function feeOpen(s){return feeMonths(s).filter(ym=>feeState(s,ym)==="offen")}
+function attSummary(s){const A=attStats(s.id);if(!A.L.length)return"";
+  return`<section class="block"><div class="bh"><h2>Anwesenheit</h2></div>
+    <div class="mini"><div><b>${A.da}</b><span>da</span></div><div><b>${A.fehlt}</b><span>gefehlt</span></div><div><b>${A.ent}</b><span>entschuldigt</span></div></div>
+    <div class="dots">${A.L.slice(0,12).reverse().map(e=>`<span class="adot a-${e.att[s.id]}" title="${wday(e.date)} ${fdate(e.date)}"><i></i>${fdate(e.date).slice(0,5)}</span>`).join("")}</div></section>`}
 function memberBlock(s){
   const M=s.member||{},Gd=s.guardian||{},f=fee(M),end=termEnd(M);
   if(!M.term&&!Gd.name&&!Gd.phone)return`<section class="block"><div class="bh"><h2>Mitgliedschaft</h2><button class="btn ghost small" data-act="editStudent">Eintragen</button></div></section>`;
@@ -556,6 +621,8 @@ function memberBlock(s){
     <span>Laufzeit</span><span class="num">${M.term==="schuljahr"?"Schuljahr":M.term==="halbjahr"?"Schulhalbjahr":"–"}${M.start?" ab "+ymLabel(M.start):""}</span>
     ${end?`<span>Bis</span><span class="num">${ymLabel(end)}${M.term==="schuljahr"?" · Juli frei":""}</span>`:""}
     ${Gd.name||Gd.phone?`<span>Eltern</span><span class="num">${esc(Gd.name||"")}${Gd.phone?`<br><a href="tel:${esc(Gd.phone.replace(/\s+/g,""))}">${esc(Gd.phone)}</a>`:""}</span>`:""}</div>
+    ${feeMonths(s).length?`<div class="f" style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap">Beiträge${feeOpen(s).length?` · <span style="color:var(--bad)">${feeOpen(s).length*f} € offen</span>`:" · alles bezahlt"}</div>
+      <div class="months">${feeMonths(s).slice(-12).map(ym=>{const st=feeState(s,ym);return`<button type="button" class="mo m-${st}" data-act="pay" data-v="${ym}" ${st==="frei"?"disabled":""} aria-label="${ymLabel(ym)}: ${st}">${MONTHS[+ym.slice(5)-1].slice(0,3)}<i>${st==="bezahlt"?"✓":st==="frei"?"frei":"offen"}</i></button>`}).join("")}</div>`:""}
   </section>`;
 }
 function docsBlock(s){
@@ -595,12 +662,24 @@ function hints(){
     else txt=`Diese Woche bist du dran: ${wday(e.date)} ${fdate(e.date)}, ${e.time}`;
     if(txt)H.push({k:"term",v:e.id,t:txt,c:"me"})});
   DB.duty.entries.filter(e=>!e.who.length&&e.date>=today()&&e.date<=in7&&(lead()||e.grp===me().group)).forEach(e=>H.push({k:"term",v:e.id,t:`${wday(e.date)} ${fdate(e.date)} (${GROUPS[e.grp].label}): noch niemand eingetragen`,c:"open"}));
+  DB.duty.entries.filter(e=>e.who.includes(meId)&&e.date<=today()&&e.date>=addDays(today(),-7)&&!attCount(e).done&&attKids(e).length).forEach(e=>{const t=times(e);if(e.date===today()&&t&&now<t.a)return;
+    H.push({k:"term",v:e.id,t:`Anwesenheit für ${wday(e.date)} ${fdate(e.date)} eintragen`,c:"me"})});
+  const ym=curYm(),openFee=visible().filter(s=>feeState(s,ym)==="offen");
+  if(openFee.length&&new Date().getDate()>=5)H.push({k:"fees",v:"",t:`${plural(openFee.length,"Beitrag","Beiträge")} für ${MONTHS[new Date().getMonth()]} offen`,c:"open"});
   const noV=visible().filter(s=>!DB.docs.some(d=>d.sid===s.id&&d.kind==="Vertrag"));
   if(noV.length)H.push({k:noV.length===1?"stu":"none",v:noV[0].id,t:noV.length===1?`Vertrag von ${noV[0].first} fehlt noch`:`${noV.length} Schüler ohne Vertrag`,c:"doc"});
   return H;
 }
 function hintsBlock(){const H=hints();if(!H.length)return"";
   return`<div class="hints">${H.map(h=>`<button class="hint ${h.c}" data-act="hint" data-k="${h.k}" data-v="${h.v}"><i></i><span>${esc(h.t)}</span><span class="r">›</span></button>`).join("")}</div>`}
+function attBlock(e,sh){
+  if(!e)return"";const kids=attKids(e),others=DB.students.filter(s=>s.group===e.grp&&visible().includes(s)&&!kids.includes(s));
+  return`<section class="fset"><h3>Anwesenheit</h3>
+    ${kids.length?`<div class="att">${kids.map(k=>`<div class="arow">${av(k.first+" "+k.last,k.group)}<span class="t">${esc(k.first)} ${esc(k.last)}</span>
+      <div class="seg">${ATT.map(([v,l])=>`<button type="button" data-act="att" data-k="${k.id}" data-v="${v}" aria-pressed="${(e.att||{})[k.id]===v}" class="a-${v}">${l}</button>`).join("")}</div></div>`).join("")}</div>`:`<p class="note2">Für diesen Tag ist niemand eingetragen.</p>`}
+    ${others.length?(sh.addKid?`<div class="choice">${others.map(o=>`<button type="button" data-act="attAdd" data-v="${o.id}">${esc(o.first)} ${esc(o.last)}</button>`).join("")}</div>`:`<button type="button" class="btn ghost small" data-act="attMore">+ Weiteres Kind</button>`):""}
+  </section>`;
+}
 /* Kalenderdatei: iPhone und Android erinnern dann von selbst (1 Stunde vorher und 30 Minuten vor Ende) */
 function downloadIcs(list,title){
   if(!list.length){toast("Keine Termine");return}
@@ -667,11 +746,17 @@ function viewTasks(){
 
 /* ---------- Lehrkräfte: Plan und Team ---------- */
 const comesTo=(e)=>{const wd=["So","Mo","Di","Mi","Do","Fr","Sa"][new Date(e.date+"T12:00").getDay()];return DB.students.filter(s=>s.group===e.grp&&(s.come||[]).includes(wd))};
+/* Anwesenheit je Termin: e.att = {schuelerId: "da" | "fehlt" | "ent"} */
+const ATT=[["da","Da"],["fehlt","Fehlt"],["ent","Entsch."]];
+const attKids=e=>{const ids=new Set([...comesTo(e).map(s=>s.id),...Object.keys(e.att||{})]);return DB.students.filter(s=>ids.has(s.id)&&visible().includes(s))};
+const attCount=e=>{const a=Object.values(e.att||{});return{da:a.filter(x=>x==="da").length,n:attKids(e).length,done:a.length>0}};
+function attStats(sid){const L=DB.duty.entries.filter(e=>e.att&&e.att[sid]).sort((a,b)=>b.date.localeCompare(a.date));
+  return{L,da:L.filter(e=>e.att[sid]==="da").length,fehlt:L.filter(e=>e.att[sid]==="fehlt").length,ent:L.filter(e=>e.att[sid]==="ent").length}}
 function termRow(e,past){
-  const ppl=e.who.map(id=>DB.teachers.find(t=>t.id===id)).filter(Boolean),kids=comesTo(e);
+  const ppl=e.who.map(id=>DB.teachers.find(t=>t.id===id)).filter(Boolean),kids=comesTo(e),ac=attCount(e);
   return`<button class="term${past?" past":""}" data-act="editTerm" data-v="${e.id}" data-hold="term:${e.id}"><span class="day"><small>${wday(e.date)}</small><b>${new Date(e.date+"T12:00").getDate()}.</b></span>
     <span class="who">${ppl.length?ppl.map(t=>`<span class="pp g-${t.group}"><i>${esc(t.name[0])}</i>${esc(t.name)}</span>`).join(""):'<span class="open">Noch offen</span>'}</span><span class="r">›</span>
-    <span class="sub">${lead()?GROUPS[e.grp].label+" · ":""}${esc(e.time.split(/[–-]/)[0])} · ${kids.length?kids.map(k=>esc(k.first)).join(", "):"–"}</span></button>`;
+    <span class="sub">${lead()?GROUPS[e.grp].label+" · ":""}${esc(e.time.split(/[–-]/)[0])} · ${e.date<=today()&&ac.done?`${ac.da} von ${ac.n} da`:kids.length?kids.map(k=>esc(k.first)).join(", "):"–"}</span></button>`;
 }
 function viewPlan(){
   const all=[...DB.duty.entries].filter(e=>lead()||e.grp===me().group).sort((a,b)=>a.date.localeCompare(b.date));
@@ -744,6 +829,7 @@ function renderSheet(){
       <label class="f">Notiz<input id="tm-note" value="${esc(d.note)}" autocomplete="off"></label>
       ${sh.isNew?`<div class="qedit"><label class="check"><input type="checkbox" id="tm-rep" ${d.rep?"checked":""} data-act="tmRep">Jede Woche wiederholen</label>
         ${d.rep?`<label class="f">Wie viele Wochen?<select id="tm-n">${opt([2,3,4,6,8,10,12],d.n||6)}</select></label>${d.who.length>1?`<label class="check"><input type="checkbox" id="tm-alt" ${d.alt?"checked":""}>Abwechseln</label>`:""}`:""}</div>`:""}
+      ${sh.isNew?"":attBlock(DB.duty.entries.find(x=>x.id===sh.id),sh)}
       ${sh.isNew?"":`<button class="btn ghost" data-act="ics" data-v="${sh.id}">In den Kalender</button>`}
       ${err}<div class="row" style="justify-content:space-between"><button class="btn" data-act="saveTerm">Speichern</button>${sh.isNew?"":ui.confirm==="term"?`<button class="btn warn" data-act="delTerm">Wirklich löschen</button>`:`<button class="btn warn" data-act="ask" data-k="term" data-v="">Löschen</button>`}</div>`}
   if(sh.type==="task"){const lock=!lead();
@@ -817,12 +903,13 @@ document.addEventListener("click",e=>{
   if(!["ask","del","delStudent","delTerm","tkRemove","delTeacher","delDoc"].includes(act))ui.confirm=null;
   if(act==="open"||act==="editTerm"||act==="editTask"||act==="openDoc"||act==="ics")if(ui.sheet?.type==="menu")ui.sheet=null;
   switch(act){
-    case"home":if(ui.mode==="student"){lsDel("kt-schule-code");STU=null;P=null}ui.mode="start";ui.run=null;ui.sheet=null;ui.sid=null;render(true);scrollTo(0,0);return;
-    case"asStudent":{if(isTeacherDevice()){openPick();return}const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";render(true)}).catch(()=>{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()});return}
+    case"home":if(ui.mode==="student"&&!ui.watch){lsDel("kt-schule-code");lsDel("kts-stu");STU=null;P=null}ui.mode="start";ui.run=null;ui.sheet=null;ui.sid=null;render(true);scrollTo(0,0);return;
+    case"asStudent":{if(isTeacherDevice()){openPick();return}const c=lsGet("kt-schule-code");if(c){ui.mode="loading";render();stuLogin(c).then(ok=>{ui.mode=ok?"student":"code";ui.stab="home";if(ok)flushStudent();render(true)}).catch(()=>{if(stuFromCache(c)){ui.mode="student";ui.stab="home";toast("Offline – du kannst trotzdem üben");render(true)}else{ui.mode="code";ui.codeErr="Keine Verbindung. Prüfe dein Internet.";render()}});return}
       ui.mode="code";ui.codeErr="";render(true);$("#code")?.focus();return}
     case"asTeacher":ui.authErr="";ui.authMsg="";
       if(CLOUD&&loaded&&session&&DB.teachers.some(t=>t.id===DB.me)){ui.mode="teacher";render(true);refresh();return}
       enterTeacher();return;
+    case"legal":ui.mode="legal";ui.legal=v;render(true);scrollTo(0,0);return;
     case"pickStu":watchStudent(v);return;
     case"stopWatch":ui.watch=false;STU=null;P=null;ui.run=null;ui.subj=null;ui.mode="pick";render(true);scrollTo(0,0);return;
     case"pfilter":ui.pfilter=v;break;
@@ -833,7 +920,7 @@ document.addEventListener("click",e=>{
     case"authToggle":ui.authUp=!ui.authUp;ui.authErr="";ui.authMsg="";break;
     case"authReset":{const m=$("#au-mail").value.trim();if(!m){ui.authErr="Trag oben deine E-Mail ein und tippe dann noch einmal auf „Passwort vergessen“.";break}
       sb.auth.resetPasswordForEmail(m,{redirectTo:location.origin+location.pathname}).then(x=>{ui.authMail=m;ui.authErr=x.error?authDe(x.error.message):"";ui.authMsg=x.error?"":"Wir haben dir einen Link zum Zurücksetzen geschickt.";render()});return}
-    case"logout":lsDel("kt-schule-teacher");lsDel("kt-schule-lead");if(!CLOUD){ui.mode="start";render(true);return}sb.auth.signOut().then(()=>{session=null;loaded=false;DB.students=[];ui.mode="start";render(true)});return;
+    case"logout":lsDel("kt-schule-teacher");lsDel("kt-schule-lead");lsDel(TKEY);if(!CLOUD){ui.mode="start";render(true);return}sb.auth.signOut().then(()=>{session=null;loaded=false;DB.students=[];ui.mode="start";render(true)});return;
     case"retryWait":enterTeacher();return;
     /* Schüler */
     case"stab":ui.stab=v;ui.subj=null;render(true);scrollTo(0,0);return;
@@ -852,7 +939,7 @@ document.addEventListener("click",e=>{
       sheetIds.forEach(id=>{const firsts=r.q.filter(x=>x.sheet===id&&x.tries===0);const total=firsts.length;const score=r.sheetScores?.[id]??0;submitSheet(id,Math.min(score,total),total)});
       if(r.isToday){P.todayDone=today();saveP()}ui.run=null;ui.stab="home";render(true);scrollTo(0,0);return}
     /* Lehrkräfte */
-    case"tab":ui.tab=v;ui.sid=null;render(true);scrollTo(0,0);return;
+    case"tab":ui.tab=v;ui.sid=null;ui.view="";render(true);scrollTo(0,0);return;
     case"filter":ui.filter=v;break;
     case"open":ui.sid=v;ui.allLogs=false;render(true);scrollTo(0,0);return;
     case"back":ui.sid=null;render(true);return;
@@ -913,6 +1000,12 @@ document.addEventListener("click",e=>{
     case"tmGrp":readTerm();sh.d.grp=v;sh.d.who=sh.d.who.filter(id=>{const t=DB.teachers.find(x=>x.id===id);return t&&side(t)===v});break;
     case"tmWho":readTerm();toggle(sh.d.who,v);break;
     case"tmRep":readTerm();sh.d.rep=a.checked;break;
+    case"pay":{s.pay=s.pay||{};if(s.pay[v])delete s.pay[v];else s.pay[v]=true;save();break}
+    case"payRow":{const st=DB.students.find(x=>x.id===a.dataset.k);st.pay=st.pay||{};if(st.pay[v])delete st.pay[v];else st.pay[v]=true;save();break}
+    case"view":ui.view=v;break;
+    case"att":{readTerm();const e=DB.duty.entries.find(x=>x.id===sh.id);e.att=e.att||{};const k=a.dataset.k;if(e.att[k]===v)delete e.att[k];else e.att[k]=v;save();break}
+    case"attMore":readTerm();sh.addKid=true;break;
+    case"attAdd":{readTerm();const e=DB.duty.entries.find(x=>x.id===sh.id);e.att=e.att||{};e.att[v]="da";sh.addKid=false;save();break}
     case"saveTerm":{readTerm();const d=sh.d;if(!d.date){sh.err="Bitte ein Datum wählen.";break}
       if(sh.isNew){const n=d.rep?d.n:1;for(let i=0;i<n;i++){const who=d.rep&&d.alt&&d.who.length>1?[d.who[i%d.who.length]]:[...d.who];DB.duty.entries.push({id:uid(),date:addDays(d.date,7*i),grp:d.grp,time:d.time,who,note:d.note})}toast(n>1?n+" Termine angelegt":"Termin angelegt")}
       else{Object.assign(DB.duty.entries.find(x=>x.id===sh.id),{date:d.date,grp:d.grp,time:d.time,who:d.who,note:d.note});toast("Gespeichert")}
@@ -935,7 +1028,7 @@ document.addEventListener("click",e=>{
     case"delDoc":removeDoc(sh.id);ui.sheet=null;break;
     case"ics":downloadIcs(DB.duty.entries.filter(e=>e.id===v),"Termin");return;
     case"icsMine":downloadIcs(DB.duty.entries.filter(e=>e.date>=today()&&e.who.includes(DB.me)),"Meine Termine");return;
-    case"hint":if(a.dataset.k==="term"){ui.tab="plan";ui.sheet={type:"term",id:v,d:JSON.parse(JSON.stringify(DB.duty.entries.find(x=>x.id===v)))}}else if(a.dataset.k==="stu"){ui.tab="students";ui.sid=v}else{ui.tab="students";ui.sid=null}break;
+    case"hint":if(a.dataset.k==="fees"){ui.tab="students";ui.sid=null;ui.view="fees"}else if(a.dataset.k==="term"){ui.tab="plan";ui.sheet={type:"term",id:v,d:JSON.parse(JSON.stringify(DB.duty.entries.find(x=>x.id===v)))}}else if(a.dataset.k==="stu"){ui.tab="students";ui.sid=v}else{ui.tab="students";ui.sid=null}break;
     case"menu":{const [k,id]=v.split(":");const m=menuItems(k,id);if(m){m.items=m.items.filter(x=>x[1]!=="open");ui.sheet={type:"menu",m}}break}
     case"mEdit":ui.sid=v;ui.sheet={type:"student",d:JSON.parse(JSON.stringify(DB.students.find(x=>x.id===v)))};break;
     case"mDelStudent":removeStudent(DB.students.find(x=>x.id===v));break;
@@ -986,10 +1079,11 @@ function goBack(){
   if(ui.sheet){ui.sheet=null;ui.confirm=null;render();return true}
   if(ui.run){ui.run=null;render(true);return true}
   if(ui.watch&&!ui.subj&&ui.stab==="home"){$("[data-act=stopWatch]")?.click();return true}
-  if(ui.mode==="pick"){ui.mode="start";render(true);return true}
+  if(ui.mode==="pick"||ui.mode==="legal"){ui.mode="start";render(true);return true}
   if(ui.mode==="student"&&ui.subj){ui.subj=null;render(true);return true}
   if(ui.mode==="student"&&ui.stab!=="home"){ui.stab="home";render(true);return true}
   if(ui.mode==="teacher"&&ui.sid){ui.sid=null;render(true);return true}
+  if(ui.mode==="teacher"&&ui.view){ui.view="";render(true);return true}
   if(ui.mode==="teacher"&&ui.tab!=="students"){ui.tab="students";render(true);return true}
   if(ui.mode==="teacher"||(ui.mode==="student"&&!tasksLocked())){ui.mode="start";render(true);return true}
   if(["code","auth"].includes(ui.mode)){ui.mode="start";render(true);return true}
@@ -1031,6 +1125,7 @@ async function checkUpdate(){
     if(!$("#upd")){const b=document.createElement("button");b.id="upd";b.className="toast";b.textContent="Neue Version da · Tippen zum Laden";b.onclick=()=>{if(dirty){clearTimeout(pushTimer);push().then(go)}else go()};document.body.append(b)}
   }catch(e){}
 }
-checkUpdate();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate()});
+checkUpdate();
+if(CLOUD&&"serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate()});
 if(CLOUD){sb.auth.onAuthStateChange((ev,s2)=>{session=s2;if(ev==="PASSWORD_RECOVERY"){ui.mode="newpw";ui.authErr="";render()}});sb.auth.getSession().then(x=>{session=x.data.session})}
 render();

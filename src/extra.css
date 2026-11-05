@@ -188,3 +188,7 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .toast.undo button{border:0;border-radius:999px;background:color-mix(in srgb,var(--bg) 22%,transparent);color:var(--bg);font-weight:700;padding:8px 14px;min-height:36px}
 .item:not(:has(.d)) .sb,.item:not(:has(.d)) .av,.item:not(:has(.d)) .r{grid-row:auto}
 .toast.undo span{white-space:nowrap}
+.soon{display:grid;justify-items:center;text-align:center;gap:10px;padding:18vh 12px 0}
+.soon .sb{width:64px;height:64px;border-radius:20px}
+.soon .sb svg{width:32px;height:32px}
+.soon h1{margin:6px 0 0}

@@ -359,6 +359,10 @@ textarea.note:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent
 .toast.undo button{border:0;border-radius:999px;background:color-mix(in srgb,var(--bg) 22%,transparent);color:var(--bg);font-weight:700;padding:8px 14px;min-height:36px}
 .item:not(:has(.d)) .sb,.item:not(:has(.d)) .av,.item:not(:has(.d)) .r{grid-row:auto}
 .toast.undo span{white-space:nowrap}
+.soon{display:grid;justify-items:center;text-align:center;gap:10px;padding:18vh 12px 0}
+.soon .sb{width:64px;height:64px;border-radius:20px}
+.soon .sb svg{width:32px;height:32px}
+.soon h1{margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -565,7 +569,7 @@ const editing=()=>{const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SE
 async function refresh(){if(!CLOUD||ui.mode!=="teacher"||!session||dirty||pushing||ui.sheet||editing())return;try{await pull();if(!dirty&&!editing()&&!ui.sheet)render()}catch(e){}}
 if(CLOUD){setInterval(refresh,60000);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh()})}
 async function enterTeacher(){
-  if(!CLOUD){DB=demoLoad();ui.mode="teacher";ui.tab="students";render(true);return}
+  if(!CLOUD){DB=demoLoad();ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");render(true);return}
   if(!session){ui.mode="auth";render(true);return}
   ui.mode="loading";render();
   try{
@@ -574,7 +578,7 @@ async function enterTeacher(){
     loaded=true;
     if(lead()){try{const r=await sb.rpc("team_code");DB.teamCode=r.data||""}catch(e){}}
     if(!DB.teachers.some(t=>t.id===DB.me))ui.mode="wait";
-    else{ui.mode="teacher";ui.tab="students";
+    else{ui.mode="teacher";ui.tab="students";lsSet("kt-schule-lead",lead()?"1":"0");
       if(lead()&&!DB.sheets.length&&!DB.state.seeded){DB.sheets=seedSheets();chk(await sb.from("app_state").upsert({key:"seeded",value:true}));DB.state.seeded=true;save()}}
   }catch(e){console.error(e);ui.mode="auth";ui.authErr="Keine Verbindung zum Speicher. Prüfe dein Internet und versuch es noch einmal."}
   render(true);
@@ -644,17 +648,26 @@ function info(k,t){return`<button class="info" data-act="info" data-v="${k}" ari
 
 /* ---------- Grundgerüst ---------- */
 function render(anim){try{renderInner(anim)}catch(err){console.error(err);$("#app").innerHTML=`<div class="block empty"><h2>Da hat etwas nicht geklappt</h2><p class="note2">Deine Daten sind gespeichert.</p><button class="btn" onclick="location.reload()">Neu laden</button></div>`}}
+/* Solange der Aufgabenbereich entsteht: Lehrkräfte sehen unter „Aufgaben“ und Schüler nach der Anmeldung einen Hinweis.
+   Die Leitung sieht alles (auf ihrem Gerät auch den Schülerbereich). Freigeben: TASKS_OPEN auf true setzen. */
+const TASKS_OPEN=false;
+const isPreview=()=>lsGet("kt-schule-lead")==="1";
+const tasksLocked=()=>!TASKS_OPEN&&!(ui.mode==="teacher"?lead():isPreview());
+function viewSoon(who){
+  return`<div class="soon">${ibadge("bolt","--c2")}<h1>Bald da</h1><p class="muted">${who==="stu"?"Hier kannst du bald üben. Wir sagen dir Bescheid!":"Dieser Bereich wird gerade programmiert."}</p>${who==="stu"?`<button class="btn ghost small" data-act="home">Zurück</button>`:""}</div>`;
+}
 function renderInner(anim){
   const app=$("#app"),nav=$("#nav"),fb=$("#fbar");
   document.body.classList.toggle("focus",!!ui.run);
   fb.hidden=!ui.run;nav.hidden=true;
   let html="";
-  if(ui.mode==="student"&&STU){
+  if(ui.mode==="student"&&STU&&tasksLocked()){html=viewSoon("stu")}
+  else if(ui.mode==="student"&&STU){
     if(ui.run){html=viewRun();fb.innerHTML=focusBar()}
     else html=ui.stab==="home"?viewStuHome():ui.stab==="practice"?viewStuPractice():viewStuStats();
     nav.hidden=false;nav.innerHTML=[["home","Heute",ICON.book],["practice","Üben",ICON.target],["stats","Fortschritt",ICON.bars]].map(([k,l,i])=>`<button data-act="stab" data-v="${k}" ${ui.stab===k?'aria-current="page"':""}>${i}${l}</button>`).join("");
   }else if(ui.mode==="teacher"){
-    html=ui.tab==="students"?(ui.sid&&cur()?viewStudent():viewStudents()):ui.tab==="tasks"?viewTasks():viewPlan();
+    html=ui.tab==="students"?(ui.sid&&cur()?viewStudent():viewStudents()):ui.tab==="tasks"?(tasksLocked()?viewSoon("t"):viewTasks()):viewPlan();
     nav.hidden=false;nav.innerHTML=[["students","Schüler",ICON.people],["tasks","Aufgaben",ICON.sheet],["plan","Plan",ICON.cal]].map(([k,l,i])=>`<button data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':""}>${i}${l}</button>`).join("");
   }else if(ui.mode==="code")html=viewCode();
   else if(ui.mode==="auth")html=viewAuth();
@@ -954,7 +967,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 function viewTasks(){
   const S=DB.sheets.filter(x=>lead()||x.groups.includes(me().group));
   const studs=visible();
-  return`<div class="headwrap"><div class="head"><h1>Aufgaben</h1><button class="btn small" data-act="newTask">Neues Blatt</button></div></div>
+  return`${!TASKS_OPEN?`<div class="hint" style="margin-bottom:14px;cursor:default"><i style="background:var(--c2)"></i><span>Nur für dich sichtbar. Alle anderen sehen „Bald da“.</span></div>`:""}<div class="headwrap"><div class="head"><h1>Aufgaben</h1><button class="btn small" data-act="newTask">Neues Blatt</button></div></div>
   <div class="sect"><span>Eigene Blätter</span></div>
   ${S.length?`<div class="list">${S.map(x=>{const who=studs.filter(s=>sheetFits(x,s)),did=who.filter(s=>DB.attempts.some(a=>a.sid===s.id&&a.sheetId===x.id)).length;
     return`<button class="item" data-act="editTask" data-v="${x.id}" data-hold="task:${x.id}">${badge(x.subject)}<span class="t">${esc(x.title)}</span><span class="r"><span class="chip">${did}/${who.length}</span>›</span><span class="d">${esc(x.subject)} · Klasse ${x.minK}–${x.maxK}</span></button>`}).join("")}</div>`:`<div class="block empty">Noch keine eigenen Blätter.</div>`}
@@ -1232,6 +1245,27 @@ document.addEventListener("input",e=>{
   if(e.target.id==="note"){cur().note=e.target.value;clearTimeout(noteT);noteT=setTimeout(save,500)}
   if(e.target.id==="q"){ui.q=e.target.value;const p=e.target.selectionStart;render();const q=$("#q");q.focus();q.setSelectionRange(p,p)}
 });
+/* Zurück: vom linken Rand nach rechts wischen (wie in iOS) */
+function goBack(){
+  if(ui.sheet){ui.sheet=null;ui.confirm=null;render();return true}
+  if(ui.run){ui.run=null;render(true);return true}
+  if(ui.mode==="student"&&ui.subj){ui.subj=null;render(true);return true}
+  if(ui.mode==="student"&&ui.stab!=="home"){ui.stab="home";render(true);return true}
+  if(ui.mode==="teacher"&&ui.sid){ui.sid=null;render(true);return true}
+  if(ui.mode==="teacher"&&ui.tab!=="students"){ui.tab="students";render(true);return true}
+  if(["code","auth"].includes(ui.mode)){ui.mode="start";render(true);return true}
+  if(ui.mode==="student"&&tasksLocked()){$("[data-act=home]")?.click();return true}
+  return false;
+}
+let sw=null;
+document.addEventListener("touchstart",e=>{const t=e.touches[0];if(e.touches.length===1&&t.clientX<28)sw={x:t.clientX,y:t.clientY,dx:0}},{passive:true});
+document.addEventListener("touchmove",e=>{if(!sw)return;const t=e.touches[0];sw.dx=t.clientX-sw.x;const dy=Math.abs(t.clientY-sw.y);
+  if(dy>40&&dy>sw.dx){sw=null;$("#app").style.transform="";return}
+  if(sw.dx>0){const el=ui.sheet?$("#layer .sheet"):$("#app");if(el){el.style.transition="none";el.style.transform=`translateX(${Math.min(sw.dx,140)*.5}px)`}}},{passive:true});
+document.addEventListener("touchend",()=>{if(!sw)return;const dx=sw.dx;sw=null;
+  for(const el of [$("#app"),$("#layer .sheet")])if(el){el.style.transition="transform .2s";el.style.transform=""}
+  if(dx>80){navigator.vibrate?.(8);goBack()}});
+document.addEventListener("touchcancel",()=>{sw=null;$("#app").style.transform=""});
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){if(ui.sheet){ui.sheet=null;render();return}if(ui.run){ui.run=null;render(true);return}}
   const r=ui.run;if(!r||r.i>=r.q.length)return;const x=r.q[r.i];
@@ -1243,7 +1277,7 @@ document.addEventListener("keydown",e=>{
 });
 /* Updates: Die App prüft beim Start und beim Zurückkehren, ob es eine neue Version gibt, und lädt sie von selbst.
    Mitten in einer Übung oder einem Formular erscheint stattdessen ein Hinweis zum Antippen. */
-const VERSION="95690dc370";
+const VERSION="792a57d7f5";
 async function checkUpdate(){
   if(!CLOUD)return;
   try{const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const v=(await r.text()).trim();

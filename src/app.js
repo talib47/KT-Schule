@@ -528,10 +528,20 @@ function viewFees(){
   const open=L.reduce((sum,s)=>sum+feeOpen(s).length*fee(s.member),0),exp=L.reduce((sum,s)=>sum+(feeState(s,ym)&&feeState(s,ym)!=="frei"?fee(s.member):0),0);
   return`<button class="crumb" data-act="view" data-v="">‹ Schüler</button><h1>Beiträge</h1>
   <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:12px"><div><b>${exp} €</b><span>${MONTHS[+ym.slice(5)-1]}</span></div><div><b style="color:${open?"var(--bad)":"inherit"}">${open} €</b><span>insgesamt offen</span></div></div>
+  ${open?`<button class="btn ghost wide" data-act="copyAsk" style="margin-bottom:12px">Offene Liste kopieren</button>`:""}
   ${L.length?`<div class="list">${L.map(s=>{const st=feeState(s,ym),o=feeOpen(s);return`<div class="item">${av(s.first+" "+s.last,s.group)}<span class="t">${esc(s.first)} ${esc(s.last)}</span>
     <span class="r">${st==="frei"?'<span class="chip">frei</span>':`<button class="mo m-${st}" data-act="payRow" data-k="${s.id}" data-v="${ym}">${MONTHS[+ym.slice(5)-1].slice(0,3)}<i>${st==="bezahlt"?"✓":"offen"}</i></button>`}</span>
     <span class="d">${fee(s.member)} € / Monat${o.length>1||(o.length===1&&o[0]!==ym)?` · ${o.length*fee(s.member)} € offen`:""}</span></div>`}).join("")}</div>`:`<div class="block empty">Bei keinem Schüler ist eine Mitgliedschaft eingetragen.</div>`}`;
 }
+/* Liste zum Nachfragen beim Vorstand: alle offenen Monate, zum Kopieren in WhatsApp */
+function askText(){
+  const L=visible().filter(s=>feeOpen(s).length).sort((a,b)=>a.first.localeCompare(b.first,"de"));
+  if(!L.length)return"";
+  return"Salam, sind diese Beiträge eingegangen?\n\n"+L.map(s=>`${s.first} ${s.last}${s.guardian?.name?" ("+s.guardian.name+")":""}: ${feeOpen(s).map(ym=>MONTHS[+ym.slice(5)-1]).join(", ")} · je ${fee(s.member)} €`).join("\n")+"\n\nDanke!";
+}
+function copyAsk(){const t=askText();if(!t){toast("Nichts offen");return}
+  const fb=()=>{ui.sheet={type:"copy",text:t};render();setTimeout(()=>{const x=$("#copytxt");x?.focus();x?.select()},50)};
+  try{navigator.clipboard.writeText(t).then(()=>toast("Liste kopiert – in WhatsApp einfügen"),fb)}catch(e){fb()}}
 function viewStudents(){
   if(ui.view==="fees")return viewFees();
   let L=visible();if(lead()&&ui.filter!=="alle")L=L.filter(s=>s.group===ui.filter);
@@ -854,6 +864,12 @@ function renderSheet(){
     body=head(esc(x.kind))+`<p class="note2" style="margin:0">${esc(x.name)} · ${fdate(x.date)}</p>
       ${sh.url&&/^image/.test(x.mime)?`<img src="${esc(sh.url)}" alt="${esc(x.name)}" style="border-radius:14px;width:100%">`:sh.url?`<a class="btn" href="${esc(sh.url)}" target="_blank" rel="noopener">PDF öffnen</a>`:`<p class="note2">${CLOUD?"Wird geladen …":"In der Vorschau lässt sich die Datei nicht öffnen. In der echten App öffnet sie sich hier."}</p>`}
       ${ui.confirm==="doc"?`<button class="btn warn" data-act="delDoc">Wirklich löschen</button>`:`<button class="btn warn" data-act="ask" data-k="doc" data-v="">Löschen</button>`}`}
+  if(sh.type==="pay"){const st=DB.students.find(x=>x.id===sh.sid),cur2=(st.pay||{})[sh.ym],f=fee(st.member);
+    body=head(`${esc(st.first)} · ${ymLabel(sh.ym)}`)+(cur2?`<div class="sum"><span>Bezahlt</span><b>${f} €</b><small>${cur2.how?esc(cur2.how)+" · ":""}eingetragen${cur2.by?" von "+esc(cur2.by):""}${cur2.at?" am "+fdate(cur2.at):""}</small></div>
+      <button class="btn warn" data-act="payUndo">Wieder auf offen</button>`
+    :`<div class="sum"><span>Offen</span><b>${f} €</b></div><div class="menu">
+      <button data-act="paySet" data-v="Überweisung">Überweisung bestätigt</button><button data-act="paySet" data-v="Bar">Bar bezahlt</button></div>`)}
+  if(sh.type==="copy")body=head("Liste")+`<textarea id="copytxt" class="note" rows="8" readonly>${esc(sh.text)}</textarea><p class="note2">Markieren und kopieren.</p>`;
   if(sh.type==="menu")body=`<div class="bh"><h2>${esc(sh.m.title)}</h2><button class="btn ghost small" data-act="close">Schließen</button></div><div class="menu">${sh.m.items.map(([l,act,id,danger])=>`<button class="${danger?"danger":""}" data-act="${act}" data-v="${id}">${l}</button>`).join("")}</div>`;
   if(sh.type==="invite")body=head("Einladen")+`<div class="infoline">${info("inv2","Danach legt die Person mit genau dieser E-Mail ein Konto an.")}</div>
     <div class="fg"><label class="f">Vorname<input id="iv-name" autocomplete="off"></label><label class="f">E-Mail<input id="iv-mail" type="email" autocomplete="off"></label></div>
@@ -1000,8 +1016,11 @@ document.addEventListener("click",e=>{
     case"tmGrp":readTerm();sh.d.grp=v;sh.d.who=sh.d.who.filter(id=>{const t=DB.teachers.find(x=>x.id===id);return t&&side(t)===v});break;
     case"tmWho":readTerm();toggle(sh.d.who,v);break;
     case"tmRep":readTerm();sh.d.rep=a.checked;break;
-    case"pay":{s.pay=s.pay||{};if(s.pay[v])delete s.pay[v];else s.pay[v]=true;save();break}
-    case"payRow":{const st=DB.students.find(x=>x.id===a.dataset.k);st.pay=st.pay||{};if(st.pay[v])delete st.pay[v];else st.pay[v]=true;save();break}
+    case"pay":ui.sheet={type:"pay",sid:s.id,ym:v};break;
+    case"payRow":ui.sheet={type:"pay",sid:a.dataset.k,ym:v};break;
+    case"paySet":{const st=DB.students.find(x=>x.id===sh.sid);st.pay=st.pay||{};st.pay[sh.ym]={how:v,by:me().name,at:today()};save();ui.sheet=null;toast("Als bezahlt eingetragen");break}
+    case"payUndo":{const st=DB.students.find(x=>x.id===sh.sid),old=st.pay[sh.ym];delete st.pay[sh.ym];save();ui.sheet=null;undoToast("Wieder offen",()=>{st.pay[sh.ym]=old;save()});break}
+    case"copyAsk":copyAsk();return;
     case"view":ui.view=v;break;
     case"att":{readTerm();const e=DB.duty.entries.find(x=>x.id===sh.id);e.att=e.att||{};const k=a.dataset.k;if(e.att[k]===v)delete e.att[k];else e.att[k]=v;save();break}
     case"attMore":readTerm();sh.addKid=true;break;
